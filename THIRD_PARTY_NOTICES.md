@@ -1,6 +1,6 @@
 # Third-party notices
 
-lolPing Lite derives the ping wheel, animations, settings concepts, input helper and tests from [darrenprx/lolPing](https://github.com/darrenprx/lolPing), revision `b947aab8d379015687117544191160bd82141954`. Its MIT license is reproduced in LICENSE. Changes replace Electron with a DBX Rust sidecar, remove networking, and add offline resource packs. The helper has UTF-8 build flags and a macOS permission-request entry point.
+lolPing Lite derives the ping wheel, animations, settings concepts, input helper, app icon and tests from [darrenprx/lolPing](https://github.com/darrenprx/lolPing), revision `b947aab8d379015687117544191160bd82141954`. Its MIT license is reproduced in LICENSE. Changes replace Electron with a DBX Rust sidecar, remove networking, and add offline resource packs. The helper enables UTF-8 and the conforming MSVC preprocessor, and adds a macOS permission-request entry point.
 
 League of Legends ping and emote icons, animations and sounds are © Riot Games. They are **not covered by the MIT license**. This project is not endorsed by Riot Games and does not reflect the views of Riot Games. League of Legends and Riot Games are trademarks of Riot Games, Inc. The optional emote pack contains the same Riot-owned assets, with byte-for-byte upstream checksums.
 
