@@ -1,5 +1,5 @@
 import type { Settings } from '../../shared/settings';
-export interface Status {state:'stopped'|'starting'|'running'|'failed'|'noAccess';enabled:boolean;error:string|null}
+export interface Status {state:'stopped'|'starting'|'running'|'failed'|'noAccess';enabled:boolean;error:string|null;pauseReason:'manual'|'shortcut'|'capture'|null}
 export interface Emote {id:string;name:string;nameZh?:string;custom:boolean;thumbnail:string;animated?:boolean;sound?:boolean}
 export interface State {status:Status;settings:Settings;emotes:Emote[];platform:'win'|'mac';extraPackInstalled:boolean;version:string}
 interface HostEvent {method:string;params:unknown}

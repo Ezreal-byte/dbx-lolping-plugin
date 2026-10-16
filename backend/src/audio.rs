@@ -1,12 +1,26 @@
 use crate::assets::{custom_id, resolve_asset};
+use crate::cache::Cache;
 use rodio::{buffer::SamplesBuffer, Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
-use std::{collections::HashMap, fs, io::Cursor, path::Path};
+use std::{
+    fs,
+    io::Cursor,
+    path::Path,
+    time::{Duration, Instant},
+};
 
-#[derive(Default)]
 pub struct Audio {
     device: Option<MixerDeviceSink>,
-    cache: HashMap<String, SamplesBuffer>,
+    cache: Cache<SamplesBuffer>,
     voices: Vec<Player>,
+}
+impl Default for Audio {
+    fn default() -> Self {
+        Self {
+            device: None,
+            cache: Cache::new(8 * 1024 * 1024, Duration::from_secs(120)),
+            voices: Vec::new(),
+        }
+    }
 }
 impl Audio {
     pub fn play(&mut self, root: &Path, data: &Path, key: &str, volume: f32) -> Result<(), String> {
@@ -27,17 +41,27 @@ impl Audio {
         } else {
             return Err("invalidSound".into());
         };
-        if !self.cache.contains_key(key) {
+        let now = Instant::now();
+        let samples = if let Some(samples) = self.cache.get(key, now) {
+            samples.clone()
+        } else {
             let path = resolve_asset(root, data, &relative).ok_or("missingSound")?;
             let bytes = fs::read(path).map_err(|e| e.to_string())?;
-            self.cache.insert(key.into(), decode(&bytes, 30)?);
-        }
+            let samples = decode(&bytes, 30)?;
+            self.cache.insert(
+                key.into(),
+                samples.clone(),
+                samples.len() * std::mem::size_of::<f32>(),
+                now,
+            );
+            samples
+        };
         if self.device.is_none() {
             self.device = Some(DeviceSinkBuilder::open_default_sink().map_err(|e| e.to_string())?);
         }
         let voice = Player::connect_new(self.device.as_ref().unwrap().mixer());
         voice.set_volume(volume.clamp(0., 1.));
-        voice.append(self.cache[key].clone());
+        voice.append(samples);
         self.voices.push(voice);
         Ok(())
     }
@@ -45,6 +69,16 @@ impl Audio {
         self.voices.clear();
         self.cache.clear();
         self.device = None;
+    }
+    pub fn maintain(&mut self) {
+        self.voices.retain(|p| !p.empty());
+        self.cache.trim(Instant::now());
+    }
+    pub fn invalidate_custom(&mut self) {
+        self.cache.retain(|k| !k.starts_with("emote:c:"));
+    }
+    pub fn cached_bytes(&self) -> usize {
+        self.cache.bytes()
     }
 }
 pub fn validate_sound(bytes: &[u8]) -> Result<(), String> {

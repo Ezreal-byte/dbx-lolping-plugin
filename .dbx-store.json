@@ -4,10 +4,10 @@
   "icon": "assets/plugin.png",
   "tags": ["pings", "emotes", "desktop", "lolping"],
   "permissions": ["host.events", "host.binary"],
-  "source": "https://github.com/Ezreal-byte/dbx-lolping-plugin/tree/v0.1.0",
+  "source": "https://github.com/Ezreal-byte/dbx-lolping-plugin/tree/v0.1.1",
   "homepage": "https://github.com/Ezreal-byte/dbx-lolping-plugin",
   "license": "MIT",
-  "releaseNotes": "Initial release. Local desktop pings, emotes and settings; no rooms or network synchronization. Rust/WebView sidecar and the upstream C++ input helper replace Electron. Code is MIT licensed; Riot game assets and the upstream icon are excluded from that license.",
+  "releaseNotes": "Hide empty overlays and lower idle WebView2 memory use while preserving loaded windows. Bound animation/audio caches, coalesce settings writes, avoid thumbnail reloads and gesture cancellation for appearance edits, and clarify pause/resume states. Code is MIT licensed; Riot game assets and the upstream icon are excluded from that license.",
   "localizations": {
     "zh-CN": {
       "name": "lolPing 轻量版",

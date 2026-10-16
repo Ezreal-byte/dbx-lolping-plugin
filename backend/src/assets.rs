@@ -75,6 +75,12 @@ pub fn mime(path: &Path) -> &'static str {
     }
 }
 pub fn library(root: &Path, data: &Path, custom: &Value) -> Vec<Value> {
+    library_items(root, data, custom, true)
+}
+pub fn library_metadata(root: &Path, data: &Path, custom: &Value) -> Vec<Value> {
+    library_items(root, data, custom, false)
+}
+fn library_items(root: &Path, data: &Path, custom: &Value, thumbnails: bool) -> Vec<Value> {
     let mut out = Vec::new();
     for e in catalog().as_array().unwrap() {
         let id = e["slug"].as_str().unwrap();
@@ -82,10 +88,12 @@ pub fn library(root: &Path, data: &Path, custom: &Value) -> Vec<Value> {
             let mut item = e.clone();
             item["id"] = json!(id);
             item["custom"] = json!(false);
-            item["thumbnail"] = json!(format!(
-                "data:image/png;base64,{}",
-                STANDARD.encode(fs::read(path).unwrap_or_default())
-            ));
+            if thumbnails {
+                item["thumbnail"] = json!(format!(
+                    "data:image/png;base64,{}",
+                    STANDARD.encode(fs::read(path).unwrap_or_default())
+                ));
+            }
             out.push(item);
         }
     }
@@ -93,13 +101,19 @@ pub fn library(root: &Path, data: &Path, custom: &Value) -> Vec<Value> {
         let Some(hash) = e["id"].as_str().and_then(custom_id) else {
             continue;
         };
-        if let Ok(bytes) = fs::read(data.join("custom").join(format!("{hash}.png"))) {
-            if bytes.len() > 131072 {
-                continue;
-            }
+        let path = data.join("custom").join(format!("{hash}.png"));
+        if path
+            .metadata()
+            .is_ok_and(|m| m.is_file() && m.len() <= 131072)
+        {
             let mut item = e.clone();
             item["custom"] = json!(true);
-            item["thumbnail"] = json!(format!("data:image/png;base64,{}", STANDARD.encode(bytes)));
+            if thumbnails {
+                item["thumbnail"] = json!(format!(
+                    "data:image/png;base64,{}",
+                    STANDARD.encode(fs::read(path).unwrap_or_default())
+                ));
+            }
             out.push(item);
         }
     }

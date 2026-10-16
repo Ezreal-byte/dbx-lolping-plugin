@@ -6,7 +6,7 @@ export class Rpc extends EventEmitter {
   next = 0; pending = new Map(); buffer = Buffer.alloc(0); history = []; log = '';
   constructor(stage, data) {
     super(); this.stage = resolve(stage); this.data = resolve(data); mkdirSync(this.data, { recursive: true });
-    const manifest = JSON.parse(readFileSync(join(this.stage, 'manifest.json'), 'utf8'));
+    const manifest = this.manifest = JSON.parse(readFileSync(join(this.stage, 'manifest.json'), 'utf8'));
     this.child = spawn(join(this.stage, manifest.entrypoints.backend.executable), [], { cwd: this.stage, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, DBX_PLUGIN_DATA_DIR: this.data, LOLPING_ROOT: this.stage } });
     this.child.stderr.on('data', b => { this.log += b.toString(); if (this.log.length > 32768) this.log = this.log.slice(-32768); });
     this.child.stdout.on('data', b => {
@@ -28,7 +28,7 @@ export class Rpc extends EventEmitter {
   frame(kind, payload) { const h = Buffer.alloc(5); h[0] = kind; h.writeUInt32BE(payload.length, 1); this.child.stdin.write(Buffer.concat([h, payload])); }
   request(method, params = {}) { const id = ++this.next; return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`RPC timed out: ${method}\n${this.log}`)); }, 30000); this.pending.set(id, { resolve, reject, timer }); this.frame(0, Buffer.from(JSON.stringify({ jsonrpc: '2.0', id, method, params }))); }); }
   binary(channel, data) { const c = Buffer.from(channel), n = Buffer.alloc(2); n.writeUInt16BE(c.length); this.frame(1, Buffer.concat([n, c, data])); }
-  initialize() { return this.request('plugin/initialize', { host: { dbxVersion: '0.5.68', hostApiVersion: '1.0.0', protocolVersions: [1] }, plugin: { id: 'io.dbx.lolping.lite', version: '0.1.0' }, permissions: ['host.events', 'host.binary'] }); }
+  initialize() { return this.request('plugin/initialize', { host: { dbxVersion: '0.5.68', hostApiVersion: '1.0.0', protocolVersions: [1] }, plugin: { id: 'io.dbx.lolping.lite', version: this.manifest.version }, permissions: ['host.events', 'host.binary'] }); }
   waitFor(predicate, timeout = 15000) { const found = this.history.find(predicate); if (found) return Promise.resolve(found); return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.off('event', listener); reject(new Error(`Event timeout\n${this.log}`)); }, timeout); const listener = event => { if (predicate(event)) { clearTimeout(timer); this.off('event', listener); resolve(event); } }; this.on('event', listener); }); }
   async upload(bytes, kind, extra = {}) { const { id } = await this.request('lolping/upload/begin', { size: bytes.length, kind, name: 'Smoke emote', ...extra }); for (let offset = 0; offset < bytes.length; offset += 512 * 1024) {
     const b = bytes.subarray(offset, offset + 512 * 1024), h = Buffer.alloc(8); h.writeBigUInt64BE(BigInt(offset));

@@ -7,6 +7,9 @@ Record OS version, display topology, DPI, DBX version, package SHA-256 and resul
 - [ ] Normal clicks, double clicks, drag-selection, typing, modifier taps and Alt+Tab continue to reach the underlying application without delay or stuck modifiers.
 - [ ] Ping and emote hold/drag/release gestures, center cancellation, trigger+click settings, Caps Lock and mouse side buttons (where available), custom triggers and pause hotkey.
 - [ ] Capture a new trigger/shortcut while running. Cancel with Escape and by timeout. Input listening resumes afterward, including if the settings page closes during capture.
+- [ ] Pause manually and by shortcut; record/cancel a key while paused and confirm it remains paused. Resume without restarting. Check the displayed shortcut and temporary recording state.
+- [ ] Idle at least 20 seconds, then trigger once and repeatedly: the first signal must not be lost or noticeably delayed. Repeat after several minutes hidden and on every display. Kept pings must remain visible.
+- [ ] Change volume/appearance during a held wheel gesture; the selection must not cancel. Drag sliders rapidly, release and reopen settings; the final value must persist without jumping back.
 - [ ] Confirm transparent pixels, no focus stealing, no taskbar entry, correct animation, volume/mute and sound output device behavior.
 - [ ] Two displays with mixed DPI and negative origins; move between them, unplug one, change resolution/scale, and verify coordinates and cleanup.
 - [ ] Preview from stopped state; it must not install input hooks. Preview windows close automatically.

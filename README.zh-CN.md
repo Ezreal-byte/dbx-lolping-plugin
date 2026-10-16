@@ -6,6 +6,8 @@
 
 ## 安装和使用
 
+0.1.1 增加覆盖层空闲降占用、动图/音频缓存上限、设置合并保存，以及明确的「暂停 / 恢复」按钮。录制按键时会临时暂停，结束后恢复此前的运行或暂停状态。实测数据与边界见 [0.1.1 验证记录](docs/validation-0.1.1.md)。
+
 1. 在 DBX 插件中心的设置中启用开发包安装，选择对应平台的 `.dbxp`。当前输出是未签名的本地开发包；商店分发需由仓库运营方签名。
 2. 打开「桌面信号」工作台，点击「启动」。默认按住 Alt（Mac 为 Option）并拖动选择信号；Ctrl 对应表情；Ctrl+Alt+P 暂停/恢复。
 3. 关闭工作台标签页不会停止已启动功能。「停止」会关闭覆盖层并释放全部输入监听；退出 DBX 时一起结束。下次启动 DBX 后需在插件里再次启动。
@@ -49,7 +51,7 @@ npm run dev
 - `native/hook-helper/`：上游 Win32 全局钩子 / macOS CGEventTap。标准输入关闭后 helper 退出；主动停止先发 shutdown，再执行有界终止。
 - `resources/`：固定版本上游资源，包含素材 SHA-256。主包仅复制 9 个表情，其余生成独立离线包。
 
-RPC 方法以 `lolping/` 为前缀：`state`、`start`、`stop`、`settings`（补丁）、`preview`、`suspend`（捕获按键时有 20 秒自动恢复租期）、`permission`、`diagnostics`、`emote/remove`、`upload/begin`、`upload/cancel`、`upload/commit`。
+RPC 方法以 `lolping/` 为前缀：`state`、`start`、`stop`、`pause`（`on` 布尔值）、`settings`（补丁）、`preview`、`suspend`（捕获按键时有 20 秒自动恢复租期）、`permission`、`diagnostics`、`emote/remove`、`upload/begin`、`upload/cancel`、`upload/commit`。`lolping/settings` 事件只携带 `{settings}`；素材变化另发 `lolping/library`。状态中的 `pauseReason` 区分手动、快捷键和录制按键暂停。
 
 上传通过 `upload/<id>` 二进制通道，每块最多 512 KiB，前 8 字节为大端 u64 偏移。必须等待 `lolping/upload` 事件确认再发下一块。扩展包带 `pack.json`，要求匹配版本、已知资源清单、大小和 SHA-256，拒绝路径越界、符号链接、重复及额外文件。配置和资源位于 `DBX_PLUGIN_DATA_DIR`，不会修改安装包目录。
 

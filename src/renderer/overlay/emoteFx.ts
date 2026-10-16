@@ -1,4 +1,5 @@
 import { EMOTE_DURATION_S, emoteAnimUrl, type EmoteArt } from '../../shared/emotes';
+import { BlobCache } from './blobCache';
 
 export interface EmoteOptions {
   /** How wide the emote's art appears. */
@@ -50,9 +51,13 @@ async function fetchImage(url: string): Promise<Blob> {
 /** The emotes on this overlay: at most one per owner ('self', 'preview' or a room member's id), each gone after EMOTE_DURATION_S. */
 export class EmoteStage {
   private readonly live = new Map<string, Live>();
-  private readonly blobs = new Map<string, Promise<Blob>>();
+  private readonly blobs: BlobCache;
 
-  constructor(private readonly layer: HTMLElement, private readonly fetchBlob: (url: string) => Promise<Blob> = fetchImage) {}
+  constructor(private readonly layer: HTMLElement, fetchBlob: (url: string) => Promise<Blob> = fetchImage) {
+    this.blobs = new BlobCache(slug => fetchBlob(emoteAnimUrl(slug)));
+  }
+  trimCache(): void { this.blobs.trim(); }
+  get cachedBytes(): number { return this.blobs.bytes; }
 
   /** Shows `art` centred on (x, y), replacing the owner's emote if it has one on screen. */
   spawn(owner: string, art: EmoteArt, x: number, y: number, opts: EmoteOptions): void {
@@ -113,16 +118,7 @@ export class EmoteStage {
   }
 
   private blob(slug: string): Promise<Blob> {
-    let blob = this.blobs.get(slug);
-    if (!blob) {
-      blob = this.fetchBlob(emoteAnimUrl(slug));
-      this.blobs.set(slug, blob);
-      const fetched = blob;
-      blob.catch(() => {
-        if (this.blobs.get(slug) === fetched) this.blobs.delete(slug); // try again next time
-      });
-    }
-    return blob;
+    return this.blobs.get(slug);
   }
 
   private end(owner: string, live: Live): void {

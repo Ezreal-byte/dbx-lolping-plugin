@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod assets;
 mod audio;
+mod cache;
 mod native;
 mod service;
 mod settings;
@@ -67,7 +68,9 @@ fn run() -> Result<(), String> {
             }) => {
                 let _ = reply.send(native.control(target, &method, params));
             }
-            Event::UserEvent(UserEvent::Settings(s)) => native.refresh(s),
+            Event::UserEvent(UserEvent::Settings(s, library_changed)) => {
+                native.refresh(s, library_changed)
+            }
             Event::UserEvent(UserEvent::Helper(id, v)) => native.helper_event(id, v),
             Event::UserEvent(UserEvent::HelperGone(id)) => native.helper_gone(id),
             Event::UserEvent(UserEvent::Renderer(id, v)) => native.renderer(id, v),

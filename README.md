@@ -6,6 +6,8 @@ Plugin ID: **`io.dbx.lolping.lite`**. Based on [darrenprx/lolPing](https://githu
 
 ## Install
 
+Version 0.1.1 adds idle overlay memory management, bounded animation/audio caches, coalesced settings saves and explicit Pause/Resume controls. See [measured results and validation limits](docs/validation-0.1.1.md).
+
 Enable development package installation in DBX Plugin Center settings and select the platform `.dbxp`. These are unsigned development candidates; a repository operator must sign marketplace releases. Open Desktop pings and press Start. Hold Alt/Option and drag to ping, Ctrl for emotes, Ctrl+Alt+P to pause/resume. Closing the settings tab keeps the service running. Stop releases all listeners and overlay windows; quitting DBX ends the plugin. A new DBX session requires manually starting it again.
 
 Nine default emotes ship in the core package. Import the optional `lolping-extra-emotes-1.zip` in settings to add the remaining 35 without network access. Up to 24 custom PNG/JPEG/GIF/WebP images are supported: static input ≤8 MiB; animation ≤5 MiB and ≤1024 pixels per side. Custom WAV/OGG/MP3 audio is limited to 1 MiB and 5 seconds.
@@ -40,6 +42,6 @@ Download builds from this repository's Actions artifacts or [Releases](https://g
 
 The `backend/` directory implements framed DBX RPC, persistence, checked uploads, native audio and overlay windows. `src/renderer/` contains React settings and the reused TypeScript/SVG/DOM renderer. `native/hook-helper/` retains the upstream input state machine, with UTF-8 compiler flags and a macOS permission-request entry point. `resources/` holds the pinned assets and their hashes.
 
-RPC methods use the `lolping/` prefix: `state`, `start`, `stop`, `settings`, `preview`, `suspend`, `permission`, `diagnostics`, `emote/remove`, `upload/begin`, `upload/cancel`, `upload/commit`. Upload chunks use `upload/<id>` binary channels, an 8-byte big-endian offset and ≤512 KiB payload. Wait for the `lolping/upload` event acknowledgment before sending the next chunk. Settings and imported data reside in `DBX_PLUGIN_DATA_DIR`.
+RPC methods use the `lolping/` prefix: `state`, `start`, `stop`, `pause` (`on` boolean), `settings`, `preview`, `suspend`, `permission`, `diagnostics`, `emote/remove`, `upload/begin`, `upload/cancel`, `upload/commit`. `lolping/settings` events carry `{settings}`; `lolping/library` events tell settings pages to refresh the resource list. Runtime status includes `pauseReason` (`manual`, `shortcut`, `capture` or null). Upload chunks use `upload/<id>` binary channels, an 8-byte big-endian offset and ≤512 KiB payload. Wait for the `lolping/upload` event acknowledgment before sending the next chunk. Settings and imported data reside in `DBX_PLUGIN_DATA_DIR`.
 
 Upstream: <https://github.com/darrenprx/lolPing>, revision `b947aab8d379015687117544191160bd82141954`. MIT applies to code, not Riot Games' icons, animations and sounds. See LICENSE and THIRD_PARTY_NOTICES.md.

@@ -1,0 +1,31 @@
+// @vitest-environment jsdom
+import { expect, test, vi } from 'vitest';
+import { act } from 'react';
+import { DEFAULT_SETTINGS } from '../../src/shared/settings';
+import type { Host, State } from '../../src/renderer/settings/api';
+test('settings events update controls without reloading thumbnails; pause and capture states are explicit',async()=>{
+  vi.resetModules();
+  vi.stubGlobal('__PING_ICONS__',{});vi.stubGlobal('__PLUGIN_ICON__','icon.png');vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
+  document.body.innerHTML='<div id="root"></div>';
+  const state:State={status:{state:'running',enabled:true,error:null,pauseReason:null},settings:structuredClone(DEFAULT_SETTINGS),emotes:[],platform:'win',extraPackInstalled:false,version:'0.1.1'};
+  const listeners=new Set<Parameters<Host['onEvent']>[0]>();
+  const invoke=vi.fn(async()=>structuredClone(state));
+  window.dbxPlugin={ready:Promise.resolve(),locale:'zh-CN',invoke,sendBinary:async()=>{},onEvent:l=>{listeners.add(l);return()=>{listeners.delete(l);};}};
+  await act(async()=>{await import('../../src/renderer/settings/main');});
+  expect(invoke).toHaveBeenCalledTimes(1);
+  await act(async()=>{for(const l of listeners)l({method:'lolping/settings',params:{settings:{...state.settings,volume:35}}});});
+  expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('35');expect(invoke).toHaveBeenCalledTimes(1);
+  const button=(text:string)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text)!;
+  await act(async()=>{button('暂停').click();});expect(invoke).toHaveBeenLastCalledWith('lolping/pause',{on:true});
+  await act(async()=>{for(const l of listeners)l({method:'lolping/status',params:{...state.status,enabled:false,pauseReason:'manual'}});});
+  expect(document.body.textContent).toContain('已暂停');expect(button('恢复')).toBeDefined();expect(document.body.textContent).toContain('Ctrl + Alt + P');
+  await act(async()=>{for(const l of listeners)l({method:'lolping/status',params:{...state.status,enabled:false,pauseReason:'capture'}});});
+  expect(document.body.textContent).toContain('录制按键期间暂时暂停');expect(button('恢复').disabled).toBe(true);
+  let finish!:(s:State)=>void;invoke.mockImplementationOnce(()=>new Promise(r=>{finish=r;}));
+  await act(async()=>{for(const l of listeners)l({method:'lolping/library',params:{changed:true}});});
+  await act(async()=>{for(const l of listeners)l({method:'lolping/settings',params:{settings:{...state.settings,volume:80}}});});
+  await act(async()=>{finish(structuredClone(state));});
+  expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('80');
+  expect(invoke).toHaveBeenLastCalledWith('lolping/state',{});
+  delete window.dbxPlugin;vi.unstubAllGlobals();
+});

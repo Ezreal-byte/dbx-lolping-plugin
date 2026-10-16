@@ -22,7 +22,7 @@ pub enum UserEvent {
         params: Value,
         reply: SyncSender<Result<Value, String>>,
     },
-    Settings(Value),
+    Settings(Value, bool),
     Helper(u64, Value),
     HelperGone(u64),
     Renderer(WindowId, Value),
@@ -61,13 +61,81 @@ struct Overlay {
     display: Display,
     ready: bool,
     pending_preview: Option<Value>,
+    epoch: u64,
+    visible: bool,
+    idle_since: Option<Instant>,
+    low_memory: bool,
+    frames: HashMap<u64, Instant>,
+    frame_ms: Vec<f64>,
 }
 impl Overlay {
-    fn send(&self, name: &str, p: Value) {
+    fn send(&mut self, name: &str, mut p: Value) {
         if self.ready {
+            if name == "maintenance" {
+                let _ = self
+                    .webview
+                    .evaluate_script("window.receive('maintenance',null)");
+                return;
+            }
+            self.epoch += 1;
+            if matches!(name, "wheelOpen" | "click" | "preview") {
+                let dispatched = Instant::now();
+                // Keep the loaded document alive: wake before dispatch, without a cold WebView rebuild.
+                if self.low_memory {
+                    self.memory_low(false);
+                }
+                self.idle_since = None;
+                if !self.visible {
+                    let _ = self.webview.set_visible(true);
+                    self.window.set_visible(true);
+                    self.visible = true;
+                }
+                self.window.set_always_on_top(true);
+                if self.frames.len() >= 128 {
+                    self.frames.clear();
+                }
+                self.frames.insert(self.epoch, dispatched);
+            }
+            if !p.is_object() {
+                p = json!({});
+            }
+            p["_epoch"] = json!(self.epoch);
             let _ = self
                 .webview
                 .evaluate_script(&format!("window.receive({},{})", json!(name), p));
+        }
+    }
+    fn idle(&mut self, epoch: u64) {
+        // A delayed idle report must never hide a newer wheel or click.
+        if epoch != self.epoch {
+            return;
+        }
+        if self.visible {
+            let _ = self.webview.set_visible(false);
+            self.window.set_visible(false);
+            self.visible = false;
+        }
+        self.idle_since.get_or_insert_with(Instant::now);
+    }
+    fn memory_low(&mut self, low: bool) {
+        #[cfg(target_os = "windows")]
+        {
+            use wry::{MemoryUsageLevel, WebViewExtWindows};
+            let _ = self.webview.set_memory_usage_level(if low {
+                MemoryUsageLevel::Low
+            } else {
+                MemoryUsageLevel::Normal
+            });
+        }
+        self.low_memory = low;
+    }
+    fn maintain(&mut self) {
+        if !self.low_memory
+            && self
+                .idle_since
+                .is_some_and(|t| t.elapsed() >= Duration::from_secs(15))
+        {
+            self.memory_low(true);
         }
     }
 }
@@ -76,6 +144,9 @@ struct Helper {
     input: ChildStdin,
     generation: u64,
     ready: bool,
+    config: Option<Value>,
+    suspended: Option<bool>,
+    config_updates: u64,
 }
 impl Helper {
     fn send(&mut self, v: Value) -> Result<(), String> {
@@ -113,6 +184,8 @@ pub struct Native {
     last_displays: Vec<Display>,
     last_poll: Instant,
     ready_until: Option<Instant>,
+    pause_reason: Option<&'static str>,
+    last_maintenance: Instant,
 }
 impl Native {
     pub fn new(shared: Arc<Shared>, proxy: EventLoopProxy<UserEvent>) -> Self {
@@ -134,6 +207,8 @@ impl Native {
             last_displays: Vec::new(),
             last_poll: Instant::now(),
             ready_until: None,
+            pause_reason: None,
+            last_maintenance: Instant::now(),
         }
     }
     fn displays(target: &EventLoopWindowTarget<UserEvent>) -> Vec<Display> {
@@ -162,6 +237,7 @@ impl Native {
         self.last_displays.clear();
         if let Some(h) = &mut self.helper {
             h.send(json!({"type":"suspend","on":true}))?;
+            h.suspended = Some(true);
         }
         self.ready_until = Some(Instant::now() + Duration::from_secs(15));
         for display in &displays {
@@ -214,6 +290,7 @@ impl Native {
                 .with_transparent(true)
                 .with_focused(false)
                 .with_clipboard(false)
+                .with_background_throttling(wry::BackgroundThrottlingPolicy::Throttle)
                 .with_custom_protocol("lolping".into(), move |_, request| {
                     let path = assets::resolve_asset(&root, &data, request.uri().path());
                     let (status, mime, bytes) =
@@ -251,14 +328,20 @@ impl Native {
                     display: display.clone(),
                     ready: false,
                     pending_preview: None,
+                    epoch: 0,
+                    visible: true,
+                    idle_since: None,
+                    low_memory: false,
+                    frames: HashMap::new(),
+                    frame_ms: Vec::new(),
                 },
             );
         }
         self.last_displays = displays;
         Ok(())
     }
-    fn all(&self, event: &str, value: Value) {
-        for w in self.windows.values() {
+    fn all(&mut self, event: &str, value: Value) {
+        for w in self.windows.values_mut() {
             w.send(event, value.clone());
         }
     }
@@ -272,6 +355,7 @@ impl Native {
         self.preview_until = None;
         self.suspend_until = None;
         self.ready_until = None;
+        self.pause_reason = None;
         self.shared.status("stopped", false, None);
     }
     fn fail(&mut self, error: String) {
@@ -338,6 +422,9 @@ impl Native {
             input,
             generation,
             ready: false,
+            config: None,
+            suspended: None,
+            config_updates: 0,
         });
         self.shared.status("starting", true, None);
         Ok(self.shared.status.lock().unwrap().clone())
@@ -361,14 +448,30 @@ impl Native {
                 Ok(json!({"state":"stopped","enabled":false}))
             }
             "lolping/diagnostics" => Ok(
-                json!({"windows":self.windows.len(),"readyWindows":self.windows.values().filter(|w|w.ready).count(),"helperPid":self.helper.as_ref().map(|h|h.child.id()),"enabled":self.enabled}),
+                json!({"windows":self.windows.len(),"readyWindows":self.windows.values().filter(|w|w.ready).count(),"visibleWindows":self.windows.values().filter(|w|w.visible).count(),"lowMemoryWindows":self.windows.values().filter(|w|w.low_memory).count(),"frameMs":self.windows.values().flat_map(|w|w.frame_ms.iter().copied()).collect::<Vec<_>>(),"audioCacheBytes":self.audio.cached_bytes(),"helperConfigWrites":self.helper.as_ref().map(|h|h.config_updates),"helperPid":self.helper.as_ref().map(|h|h.child.id()),"enabled":self.enabled}),
             ),
+            "lolping/pause" => {
+                if self.helper.is_none() {
+                    return Err("notRunning".into());
+                }
+                self.enabled = p["on"] != true;
+                self.pause_reason = (!self.enabled).then_some("manual");
+                if !self.enabled {
+                    self.all("clear", Value::Null);
+                    self.audio.clear();
+                    self.wheel = None;
+                }
+                self.sync_helper();
+                Ok(self.shared.status.lock().unwrap().clone())
+            }
             "lolping/suspend" => {
                 let on = p["on"] == true;
-                if let Some(h) = &mut self.helper {
-                    h.send(json!({"type":"suspend","on":on}))?;
-                }
                 self.suspend_until = on.then(|| Instant::now() + Duration::from_secs(20));
+                if on {
+                    self.all("clear", Value::Null);
+                    self.wheel = None;
+                }
+                self.sync_helper();
                 Ok(json!({"ok":true}))
             }
             "lolping/permission" => {
@@ -389,14 +492,7 @@ impl Native {
                 let emote = p["wheel"] == "emote";
                 if emote {
                     let store = self.shared.store.lock().unwrap();
-                    if !assets::library(
-                        &self.shared.root,
-                        &self.shared.data,
-                        &store.settings["customEmotes"],
-                    )
-                    .iter()
-                    .any(|e| e["id"] == id)
-                    {
+                    if !store.available.contains(id) {
                         return Err("missingEmote".into());
                     }
                 } else if !settings::PINGS.contains(&id) {
@@ -429,9 +525,12 @@ impl Native {
             _ => Err("unknownControl".into()),
         }
     }
-    pub fn refresh(&mut self, s: Value) {
+    pub fn refresh(&mut self, s: Value, library_changed: bool) {
         self.settings = s;
-        self.audio.clear();
+        if library_changed {
+            self.audio.invalidate_custom();
+            self.all("library", Value::Null);
+        }
         self.all("settings", self.settings.clone());
         self.sync_helper();
     }
@@ -444,27 +543,57 @@ impl Native {
             if !h.ready {
                 return;
             }
-            let result = h
-                .send(settings::helper_config(
-                    &self.settings,
-                    self.enabled && ready,
-                ))
-                .and_then(|_| {
-                    h.send(json!({"type":"suspend","on":!ready || self.suspend_until.is_some()}))
-                });
+            let config = settings::helper_config(&self.settings, self.enabled && ready);
+            let suspended = !ready || self.suspend_until.is_some();
+            // setConfig cancels an in-flight gesture; appearance/audio edits must not send it.
+            let result = (|| {
+                if h.config.as_ref() != Some(&config) {
+                    h.send(config.clone())?;
+                    h.config = Some(config);
+                    h.config_updates += 1;
+                }
+                if h.suspended != Some(suspended) {
+                    h.send(json!({"type":"suspend","on":suspended}))?;
+                    h.suspended = Some(suspended);
+                }
+                Ok::<(), String>(())
+            })();
             if let Err(e) = result {
                 self.fail(e);
             } else {
-                self.shared.status(
+                self.shared.status_with_pause(
                     if ready { "running" } else { "starting" },
-                    self.enabled && ready,
+                    self.enabled && ready && !suspended,
                     None,
+                    if self.suspend_until.is_some() {
+                        Some("capture")
+                    } else {
+                        self.pause_reason
+                    },
                 );
             }
         }
     }
     pub fn renderer(&mut self, id: WindowId, v: Value) {
         match v["type"].as_str().unwrap_or("") {
+            "idle" => {
+                if let Some(w) = self.windows.get_mut(&id) {
+                    w.idle(v["epoch"].as_u64().unwrap_or(u64::MAX));
+                }
+            }
+            "frame" => {
+                if let Some(w) = self.windows.get_mut(&id) {
+                    if let Some(start) = v["epoch"]
+                        .as_u64()
+                        .and_then(|epoch| w.frames.remove(&epoch))
+                    {
+                        if w.frame_ms.len() >= 128 {
+                            w.frame_ms.remove(0);
+                        }
+                        w.frame_ms.push(start.elapsed().as_secs_f64() * 1000.);
+                    }
+                }
+            }
             "ready" => {
                 if let Some(w) = self.windows.get_mut(&id) {
                     w.ready = true;
@@ -505,7 +634,7 @@ impl Native {
                 }
             }
             "selected" => {
-                for (other, w) in &self.windows {
+                for (other, w) in &mut self.windows {
                     if *other != id {
                         w.send("clear", json!(null));
                     }
@@ -541,11 +670,17 @@ impl Native {
             }
             "toggled" => {
                 self.enabled = v["enabled"] == true;
+                self.pause_reason = (!self.enabled).then_some("shortcut");
+                // The helper already changed its state; avoid a redundant config/cancel round-trip.
+                if let Some(config) = self.helper.as_mut().and_then(|h| h.config.as_mut()) {
+                    config["enabled"] = json!(self.enabled);
+                }
                 if !self.enabled {
                     self.all("clear", Value::Null);
                     self.audio.clear();
+                    self.wheel = None;
                 }
-                self.shared.status("running", self.enabled, None);
+                self.sync_helper();
             }
             "cancel" => {
                 self.all("cancel", Value::Null);
@@ -567,7 +702,7 @@ impl Native {
                     self.wheel = id;
                 }
                 if let Some(id) = id {
-                    if let Some(w) = self.windows.get(&id) {
+                    if let Some(w) = self.windows.get_mut(&id) {
                         let (x, y) = w.display.local(x, y, cfg!(target_os = "macos"));
                         if kind == "wheelOpen" || kind == "click" {
                             w.window.set_always_on_top(true);
@@ -605,9 +740,7 @@ impl Native {
         }
         if self.suspend_until.is_some_and(|t| Instant::now() >= t) {
             self.suspend_until = None;
-            if let Some(h) = &mut self.helper {
-                let _ = h.send(json!({"type":"suspend","on":false}));
-            }
+            self.sync_helper();
         }
         if self.preview_until.is_some_and(|t| Instant::now() >= t) {
             self.preview_until = None;
@@ -623,6 +756,14 @@ impl Native {
             if let Err(e) = self.rebuild(target) {
                 self.fail(e);
             }
+        }
+        for w in self.windows.values_mut() {
+            w.maintain();
+        }
+        self.audio.maintain();
+        if self.last_maintenance.elapsed() >= Duration::from_secs(30) {
+            self.last_maintenance = Instant::now();
+            self.all("maintenance", Value::Null);
         }
     }
 }

@@ -3,7 +3,9 @@ export type LanguagePref = 'auto' | Lang;
 export const resolveLang = (pref: LanguagePref, locale: string): Lang => pref === 'auto' ? (/^zh/i.test(locale) ? 'zh-CN' : 'en') : pref;
 const en = {
   title: 'Desktop pings', subtitle: 'A little expression, anywhere on your desktop.',
-  start: 'Start', stop: 'Stop', stopped: 'Stopped', running: 'Running', paused: 'Paused by shortcut', starting: 'Starting…', failed: 'Could not start', noAccess: 'Accessibility permission needed',
+  start: 'Start', stop: 'Stop', stopped: 'Stopped', running: 'Running', paused: 'Paused', starting: 'Starting…', failed: 'Could not start', noAccess: 'Accessibility permission needed',
+  pause: 'Pause', resume: 'Resume', capturePaused: 'Paused while recording a key', capturePauseHelp: 'Finish or cancel key recording to return to the previous running / paused state.',
+  resumeHelp: 'Pings are paused. Click Resume or use', stoppedHelp: 'Input listeners are released. Click Start to enable desktop pings.', saving: 'Saving…', saved: 'Changes saved automatically',
   intro: 'Hold the trigger and drag to choose a ping. Release to place it. Ordinary input passes through.',
   lifecycle: 'Closing this tab keeps pings running. Stop releases all input listeners. Quitting DBX stops the plugin.',
   triggers: 'Controls', pings: 'Pings & sound', emotes: 'Local emotes', preferences: 'Preferences',
@@ -35,7 +37,9 @@ const en = {
 };
 export type Strings = typeof en;
 const zh: Strings = {
-  title: '桌面信号', subtitle: '随时在桌面表达一个信号。', start: '启动', stop: '停止', stopped: '已停止', running: '运行中', paused: '已通过快捷键暂停', starting: '正在启动…', failed: '启动失败', noAccess: '需要辅助功能授权',
+  title: '桌面信号', subtitle: '随时在桌面表达一个信号。', start: '启动', stop: '停止', stopped: '已停止', running: '运行中', paused: '已暂停', starting: '正在启动…', failed: '启动失败', noAccess: '需要辅助功能授权',
+  pause: '暂停', resume: '恢复', capturePaused: '录制按键期间暂时暂停', capturePauseHelp: '完成或取消按键录制后，会回到之前的运行或暂停状态。',
+  resumeHelp: '当前不会触发信号，点击“恢复”或按', stoppedHelp: '输入监听已释放。点击“启动”后即可使用桌面信号。', saving: '正在保存…', saved: '更改会自动保存',
   intro: '按住触发键并拖动选择信号，松开后显示。普通键鼠操作会继续传给下方应用。', lifecycle: '关闭此标签页后仍继续运行；停止会释放输入监听；退出 DBX 后停止。',
   triggers: '操作控制', pings: '信号与声音', emotes: '本地表情', preferences: '偏好设置', trigger: '信号触发键', emoteTrigger: '表情触发键', off: '关闭', custom: '自定义按键…', mouse4: '鼠标侧键 4', mouse5: '鼠标侧键 5',
   toggle: '暂停 / 恢复快捷键', capture: '请按一个键，Esc 取消', captureShortcut: '请按 Ctrl / Alt / Command 与其他键的组合', hintUnusable: '该键无法使用。', hintNotTrigger: '请选择其他按键。', hintNeedModifier: '请加入 Ctrl、Alt 或 Command。',

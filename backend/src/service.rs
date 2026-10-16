@@ -17,6 +17,7 @@ use tao::event_loop::EventLoopProxy;
 pub struct Store {
     pub settings: Value,
     pub uploads: Uploads,
+    pub available: HashSet<String>,
 }
 pub struct Shared {
     pub root: PathBuf,
@@ -32,12 +33,12 @@ impl Shared {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_else(settings::defaults);
-        let available: HashSet<_> = assets::library(&root, &data, &raw["customEmotes"])
+        let available: HashSet<_> = assets::library_metadata(&root, &data, &raw["customEmotes"])
             .iter()
             .filter_map(|v| v["id"].as_str().map(str::to_owned))
             .collect();
         let mut s = settings::normalize(&raw, &available, cfg!(target_os = "macos"));
-        s["customEmotes"] = json!(assets::library(&root, &data, &raw["customEmotes"])
+        s["customEmotes"] = json!(assets::library_metadata(&root, &data, &raw["customEmotes"])
             .into_iter()
             .filter(|v| v["custom"] == true)
             .map(|mut v| {
@@ -52,13 +53,25 @@ impl Shared {
             store: Mutex::new(Store {
                 settings: s,
                 uploads: Uploads::default(),
+                available,
             }),
-            status: Mutex::new(json!({"state":"stopped","enabled":false,"error":null})),
+            status: Mutex::new(
+                json!({"state":"stopped","enabled":false,"error":null,"pauseReason":null}),
+            ),
             emitter: Mutex::new(None),
         }))
     }
     pub fn status(&self, state: &str, enabled: bool, error: Option<String>) {
-        let value = json!({"state":state,"enabled":enabled,"error":error});
+        self.status_with_pause(state, enabled, error, None);
+    }
+    pub fn status_with_pause(
+        &self,
+        state: &str,
+        enabled: bool,
+        error: Option<String>,
+        reason: Option<&str>,
+    ) {
+        let value = json!({"state":state,"enabled":enabled,"error":error,"pauseReason":reason});
         *self.status.lock().unwrap() = value.clone();
         self.emit("lolping/status", value);
     }
@@ -96,10 +109,14 @@ impl Handler {
             .map_err(err)?
             .map_err(err)
     }
-    fn refresh(&self, s: Value) {
-        let _ = self.proxy.send_event(UserEvent::Settings(s));
-        self.shared
-            .emit("lolping/settings", json!({"changed":true}));
+    fn refresh(&self, s: Value, library_changed: bool) {
+        let _ = self
+            .proxy
+            .send_event(UserEvent::Settings(s.clone(), library_changed));
+        self.shared.emit("lolping/settings", json!({"settings":s}));
+        if library_changed {
+            self.shared.emit("lolping/library", json!({"changed":true}));
+        }
     }
 }
 impl PluginHandler for Handler {
@@ -117,6 +134,7 @@ impl PluginHandler for Handler {
             | "lolping/stop"
             | "lolping/preview"
             | "lolping/suspend"
+            | "lolping/pause"
             | "lolping/permission"
             | "lolping/diagnostics" => self.control(method, p),
             "lolping/settings" => {
@@ -131,17 +149,15 @@ impl PluginHandler for Handler {
                         raw[k] = v.clone();
                     }
                 }
-                let available =
-                    assets::library(&self.shared.root, &self.shared.data, &raw["customEmotes"])
-                        .iter()
-                        .filter_map(|v| v["id"].as_str().map(str::to_owned))
-                        .collect();
-                let next = settings::normalize(&raw, &available, cfg!(target_os = "macos"));
+                let next = settings::normalize(&raw, &store.available, cfg!(target_os = "macos"));
+                if next == store.settings {
+                    return Ok(next);
+                }
                 settings::atomic_json(&self.shared.data.join("settings.json"), &next)
                     .map_err(err)?;
                 store.settings = next.clone();
                 drop(store);
-                self.refresh(next.clone());
+                self.refresh(next.clone(), false);
                 Ok(next)
             }
             "lolping/upload/begin" => {
@@ -206,9 +222,17 @@ impl PluginHandler for Handler {
                     _ => return Err(err("invalidUpload")),
                 };
                 let next = store.settings.clone();
+                store.available = assets::library_metadata(
+                    &self.shared.root,
+                    &self.shared.data,
+                    &next["customEmotes"],
+                )
+                .iter()
+                .filter_map(|v| v["id"].as_str().map(str::to_owned))
+                .collect();
                 drop(store);
                 drop(upload);
-                self.refresh(next);
+                self.refresh(next, true);
                 Ok(result)
             }
             "lolping/emote/remove" => {
@@ -220,15 +244,19 @@ impl PluginHandler for Handler {
                     .as_array_mut()
                     .unwrap()
                     .retain(|v| v["id"] != id);
-                let available =
-                    assets::library(&self.shared.root, &self.shared.data, &next["customEmotes"])
-                        .iter()
-                        .filter_map(|v| v["id"].as_str().map(str::to_owned))
-                        .collect();
+                let available = assets::library_metadata(
+                    &self.shared.root,
+                    &self.shared.data,
+                    &next["customEmotes"],
+                )
+                .iter()
+                .filter_map(|v| v["id"].as_str().map(str::to_owned))
+                .collect();
                 next = settings::normalize(&next, &available, cfg!(target_os = "macos"));
                 settings::atomic_json(&self.shared.data.join("settings.json"), &next)
                     .map_err(err)?;
                 store.settings = next.clone();
+                store.available = available;
                 for ext in ["png", "anim", "sound"] {
                     let _ = fs::remove_file(
                         self.shared
@@ -238,7 +266,7 @@ impl PluginHandler for Handler {
                     );
                 }
                 drop(store);
-                self.refresh(next);
+                self.refresh(next, true);
                 Ok(json!({"ok":true}))
             }
             _ => Err(PluginError::method_not_found(method)),

@@ -1,0 +1,250 @@
+{
+  "date": "2026-10-16",
+  "platform": "Windows x64",
+  "scope": "Isolated plugin process tree. One sequential run per version on the same desktop; not a multi-machine guarantee.",
+  "baseline": {
+    "version": "0.1.0",
+    "measurement": "Working-set sum includes shared pages; private commit is not resident RAM. Frame ACK excludes OS input and display scanout.",
+    "samples": {
+      "warm": {
+        "workingSetBytes": 534601728,
+        "privateCommitBytes": 299700224,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23343104,
+            "privateCommitBytes": 5267456
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 133955584,
+            "privateCommitBytes": 46034944
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 11198464,
+            "privateCommitBytes": 2629632
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 208371712,
+            "privateCommitBytes": 179965952
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 42913792,
+            "privateCommitBytes": 13180928
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 22220800,
+            "privateCommitBytes": 9428992
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 78344192,
+            "privateCommitBytes": 40718336
+          },
+          {
+            "name": "hook-helper",
+            "workingSetBytes": 6361088,
+            "privateCommitBytes": 1191936
+          },
+          {
+            "name": "conhost",
+            "workingSetBytes": 7892992,
+            "privateCommitBytes": 1282048
+          }
+        ]
+      },
+      "idle": {
+        "workingSetBytes": 532946944,
+        "privateCommitBytes": 297447424,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23343104,
+            "privateCommitBytes": 5267456
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 134537216,
+            "privateCommitBytes": 46100480
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 11198464,
+            "privateCommitBytes": 2629632
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 208379904,
+            "privateCommitBytes": 179961856
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 42971136,
+            "privateCommitBytes": 13189120
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 22220800,
+            "privateCommitBytes": 9428992
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 76042240,
+            "privateCommitBytes": 38395904
+          },
+          {
+            "name": "hook-helper",
+            "workingSetBytes": 6361088,
+            "privateCommitBytes": 1191936
+          },
+          {
+            "name": "conhost",
+            "workingSetBytes": 7892992,
+            "privateCommitBytes": 1282048
+          }
+        ]
+      },
+      "stopped": {
+        "workingSetBytes": 23441408,
+        "privateCommitBytes": 5218304,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23441408,
+            "privateCommitBytes": 5218304
+          }
+        ]
+      }
+    }
+  },
+  "current": {
+    "version": "0.1.1",
+    "measurement": "Working-set sum includes shared pages; private commit is not resident RAM. Frame ACK excludes OS input and display scanout.",
+    "samples": {
+      "warm": {
+        "workingSetBytes": 528883712,
+        "privateCommitBytes": 293236736,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23035904,
+            "privateCommitBytes": 5402624
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 134000640,
+            "privateCommitBytes": 45830144
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 11194368,
+            "privateCommitBytes": 2617344
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 206626816,
+            "privateCommitBytes": 178061312
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 43003904,
+            "privateCommitBytes": 13148160
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 21889024,
+            "privateCommitBytes": 7983104
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 75329536,
+            "privateCommitBytes": 37781504
+          },
+          {
+            "name": "hook-helper",
+            "workingSetBytes": 5918720,
+            "privateCommitBytes": 1146880
+          },
+          {
+            "name": "conhost",
+            "workingSetBytes": 7884800,
+            "privateCommitBytes": 1265664
+          }
+        ]
+      },
+      "idle": {
+        "workingSetBytes": 455319552,
+        "privateCommitBytes": 290652160,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23035904,
+            "privateCommitBytes": 5402624
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 134647808,
+            "privateCommitBytes": 45887488
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 11194368,
+            "privateCommitBytes": 2617344
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 206639104,
+            "privateCommitBytes": 178061312
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 43061248,
+            "privateCommitBytes": 13156352
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 21889024,
+            "privateCommitBytes": 7983104
+          },
+          {
+            "name": "msedgewebview2",
+            "workingSetBytes": 1048576,
+            "privateCommitBytes": 35131392
+          },
+          {
+            "name": "hook-helper",
+            "workingSetBytes": 5918720,
+            "privateCommitBytes": 1146880
+          },
+          {
+            "name": "conhost",
+            "workingSetBytes": 7884800,
+            "privateCommitBytes": 1265664
+          }
+        ]
+      },
+      "stopped": {
+        "workingSetBytes": 23097344,
+        "privateCommitBytes": 5152768,
+        "processes": [
+          {
+            "name": "lolping-backend",
+            "workingSetBytes": 23097344,
+            "privateCommitBytes": 5152768
+          }
+        ]
+      }
+    },
+    "firstIdleWakeFrameMs": 11.7468,
+    "warmFrames": {
+      "count": 24,
+      "p50Ms": 7.34,
+      "p95Ms": 9.195699999999999,
+      "maxMs": 9.5236
+    }
+  }
+}
