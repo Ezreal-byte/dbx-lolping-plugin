@@ -4,6 +4,8 @@ lolPing Lite derives the ping wheel, animations, settings concepts, input helper
 
 League of Legends ping and emote icons, animations and sounds are © Riot Games. They are **not covered by the MIT license**. This project is not endorsed by Riot Games and does not reflect the views of Riot Games. League of Legends and Riot Games are trademarks of Riot Games, Inc. The optional emote pack contains the same Riot-owned assets, with byte-for-byte upstream checksums.
 
-DBX plugin SDK is vendored under vendor/dbx-plugin-sdk; see its Cargo.toml, README.md and LICENSE. It is Apache-2.0 licensed. React is MIT licensed. Wry and Tao are Apache-2.0/MIT licensed; rodio is MIT/Apache-2.0 licensed. Cargo.lock and package-lock.json record the complete dependency versions and their source registries.
+DBX plugin SDK is vendored under vendor/dbx-plugin-sdk; see its Cargo.toml, README.md and LICENSE. It is Apache-2.0 licensed. React is MIT licensed. Tao is Apache-2.0/MIT licensed; tiny-skia is BSD-3-Clause licensed; rodio is MIT/Apache-2.0 licensed. Cargo.lock and package-lock.json record the complete dependency versions and their source registries. The native overlay no longer depends on Wry or a browser engine.
 
 Ogg Opus emotes are decoded by libopus through the `opus` and `opusic-sys` Rust crates; the `ogg` crate demultiplexes their packets. libopus copyright and redistribution terms are reproduced in `licenses/opus-COPYING`. Original sound files are shipped unchanged.
+
+Native overlay labels use the unmodified Inter 4.1 font by The Inter Project Authors, embedded in the backend under the SIL Open Font License 1.1. See `licenses/Inter-OFL.txt` and `backend/resources/README.md` for its source and checksum. `ttf-parser` (MIT/Apache-2.0) converts the fixed labels to cached vector outlines.

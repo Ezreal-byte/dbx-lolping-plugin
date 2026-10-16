@@ -1,17 +1,25 @@
 {
   "name": "lolPing Lite",
-  "description": "Desktop-wide ping and local emote wheels with native sound, offline emote packs and DBX-integrated settings.",
-  "icon": "assets/plugin.png",
-  "tags": ["pings", "emotes", "desktop", "lolping"],
-  "permissions": ["host.events", "host.binary"],
-  "source": "https://github.com/Ezreal-byte/dbx-lolping-plugin/tree/v0.1.1",
+  "description": "Native desktop ping and emote wheels with low memory use, local sound, offline packs and DBX-integrated settings.",
+  "icon": "https://raw.githubusercontent.com/Ezreal-byte/dbx-lolping-plugin/v0.2.1/assets/plugin.png",
+  "tags": [
+    "pings",
+    "emotes",
+    "desktop",
+    "lolping"
+  ],
+  "permissions": [
+    "host.events",
+    "host.binary"
+  ],
+  "source": "https://github.com/Ezreal-byte/dbx-lolping-plugin/tree/v0.2.1",
   "homepage": "https://github.com/Ezreal-byte/dbx-lolping-plugin",
   "license": "MIT",
-  "releaseNotes": "Hide empty overlays and lower idle WebView2 memory use while preserving loaded windows. Bound animation/audio caches, coalesce settings writes, avoid thumbnail reloads and gesture cancellation for appearance edits, and clarify pause/resume states. Code is MIT licensed; Riot game assets and the upstream icon are excluded from that license.",
+  "releaseNotes": "Replace overlay WebViews with native Rust rendering. Bound scene buffers, image caches and streamed animation frames; decode audio off the input/render thread. Windows single-desktop samples were 39–52 MiB for the plugin process tree (excluding DBX and settings UI; not a worst-case guarantee). Preserve upstream C++ gestures and pause/capture behavior. Fix Windows gray overlay frames, improve wheel text with Inter, add a GitHub Release download button for the optional emote ZIP, and use the yellow question-mark icon. Existing settings/assets remain compatible. Riot game assets are excluded from the MIT code license.",
   "localizations": {
     "zh-CN": {
       "name": "lolPing 轻量版",
-      "description": "全桌面信号与本地表情轮盘，支持原生音效、离线扩展包与 DBX 内设置。"
+      "description": "低内存原生桌面信号与表情轮盘，支持本地音效、离线扩展包和 DBX 内设置。"
     }
   }
 }

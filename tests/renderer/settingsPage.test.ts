@@ -27,5 +27,11 @@ test('settings events update controls without reloading thumbnails; pause and ca
   await act(async()=>{finish(structuredClone(state));});
   expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('80');
   expect(invoke).toHaveBeenLastCalledWith('lolping/state',{});
+  expect(document.body.textContent).toContain('lolping-extra-emotes-1.zip');
+  await act(async()=>{button('去 GitHub 下载 ↗').click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/releases',{});
+  invoke.mockRejectedValueOnce(new Error('openReleasesFailed'));
+  await act(async()=>{button('去 GitHub 下载 ↗').click();});
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('github.com/Ezreal-byte/dbx-lolping-plugin/releases');
   delete window.dbxPlugin;vi.unstubAllGlobals();
 });

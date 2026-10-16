@@ -25,6 +25,7 @@ for (const filename of readdirSync('dist').filter(n => n.endsWith('.dbxp'))) {
   assert.equal(manifest.entrypoints.backend.transport, 'stdio-framed');
   assert.equal(Object.keys(files).filter(p => /^ui\/emotes\/.*\.webp$/.test(p)).length, 9);
   assert.ok(!Object.keys(files).some(p => /electron|node_modules|rooms?\//i.test(p)));
+  if (manifest.version.startsWith('0.2.')) assert.ok(!Object.keys(files).some(p => /ui\/overlay\/|webview2|wry/i.test(p)), 'Native overlay packages must not ship browser components');
   assert.ok(bytes.length <= 30 * 1048576, `Core package exceeds 30 MiB: ${filename}`);
   report.push({ filename, bytes: bytes.length, files: Object.keys(files).length, schema: 'valid', checksums: 'valid', coreEmotes: 9, within30MiB: true });
 }

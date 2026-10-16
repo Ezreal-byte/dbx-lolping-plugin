@@ -8,6 +8,137 @@ use std::{
     time::{Duration, Instant},
 };
 
+enum Work {
+    Play {
+        epoch: u64,
+        key: String,
+        volume: f32,
+    },
+    Clear(std::sync::mpsc::SyncSender<()>),
+    Invalidate,
+    Quit,
+}
+/// Device startup and Opus decoding must not stall the native rendering thread.
+pub struct AudioWorker {
+    tx: std::sync::mpsc::SyncSender<Work>,
+    epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    bytes: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl AudioWorker {
+    pub fn new(
+        root: std::path::PathBuf,
+        data: std::path::PathBuf,
+        on_error: impl Fn(String) + Send + 'static,
+    ) -> Self {
+        use std::sync::{
+            atomic::{AtomicU64, AtomicUsize, Ordering},
+            mpsc, Arc,
+        };
+        let (tx, rx) = mpsc::sync_channel(32);
+        let epoch = Arc::new(AtomicU64::new(0));
+        let bytes = Arc::new(AtomicUsize::new(0));
+        let generation = epoch.clone();
+        let counter = bytes.clone();
+        let thread = std::thread::spawn(move || {
+            let mut audio = Audio::default();
+            loop {
+                match rx.recv_timeout(Duration::from_millis(500)) {
+                    Ok(Work::Play { epoch, key, volume }) => {
+                        if generation.load(Ordering::Acquire) == epoch {
+                            if let Err(e) = audio.play(&root, &data, &key, volume) {
+                                on_error(e);
+                            }
+                            if generation.load(Ordering::Acquire) != epoch {
+                                audio.clear();
+                            }
+                        }
+                    }
+                    Ok(Work::Clear(ack)) => {
+                        audio.clear();
+                        counter.store(0, Ordering::Release);
+                        let _ = ack.send(());
+                    }
+                    Ok(Work::Invalidate) => audio.invalidate_custom(),
+                    Ok(Work::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+                audio.maintain();
+                counter.store(audio.cached_bytes(), Ordering::Release);
+            }
+        });
+        Self {
+            tx,
+            epoch,
+            bytes,
+            thread: Some(thread),
+        }
+    }
+    pub fn play(&self, _root: &Path, _data: &Path, key: &str, volume: f32) -> Result<(), String> {
+        use std::sync::{atomic::Ordering, mpsc::TrySendError};
+        if volume <= 0. {
+            return Ok(());
+        }
+        match self.tx.try_send(Work::Play {
+            epoch: self.epoch.load(Ordering::Acquire),
+            key: key.into(),
+            volume,
+        }) {
+            Ok(()) | Err(TrySendError::Full(_)) => Ok(()), // Audio floods never block input or painting.
+            Err(TrySendError::Disconnected(_)) => Err("audioWorkerExited".into()),
+        }
+    }
+    pub fn clear(&self) {
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        if self.tx.send(Work::Clear(tx)).is_ok() {
+            let _ = rx.recv_timeout(Duration::from_secs(1));
+        }
+    }
+    pub fn invalidate_custom(&self) {
+        let _ = self.tx.send(Work::Invalidate);
+    }
+    pub fn cached_bytes(&self) -> usize {
+        self.bytes.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+impl Drop for AudioWorker {
+    fn drop(&mut self) {
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let _ = self.tx.send(Work::Quit);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod worker_tests {
+    use super::*;
+    #[test]
+    fn invalid_sound_reports_off_thread_and_clear_drains_pending_playback() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = AudioWorker::new("missing-root".into(), "missing-data".into(), move |e| {
+            let _ = tx.send(e);
+        });
+        worker
+            .play(Path::new(""), Path::new(""), "invalid/path", 0.5)
+            .unwrap();
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(3)).unwrap(),
+            "invalidSound"
+        );
+        for _ in 0..100 {
+            worker
+                .play(Path::new(""), Path::new(""), "missing", 0.5)
+                .unwrap();
+        }
+        worker.clear();
+        assert_eq!(worker.cached_bytes(), 0);
+        drop(worker);
+    }
+}
+
 pub struct Audio {
     device: Option<MixerDeviceSink>,
     cache: Cache<SamplesBuffer>,

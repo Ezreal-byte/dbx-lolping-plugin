@@ -2,7 +2,9 @@
 mod assets;
 mod audio;
 mod cache;
+mod links;
 mod native;
+mod render;
 mod service;
 mod settings;
 use dbx_plugin_sdk::{PluginMetadata, PluginServer, PluginTransport};
@@ -73,13 +75,15 @@ fn run() -> Result<(), String> {
             }
             Event::UserEvent(UserEvent::Helper(id, v)) => native.helper_event(id, v),
             Event::UserEvent(UserEvent::HelperGone(id)) => native.helper_gone(id),
-            Event::UserEvent(UserEvent::Renderer(id, v)) => native.renderer(id, v),
             Event::UserEvent(UserEvent::Quit) => {
                 let _ = native.control(target, "lolping/stop", serde_json::Value::Null);
                 *flow = ControlFlow::Exit;
             }
             Event::MainEventsCleared => native.tick(target),
             _ => {}
+        }
+        if !matches!(*flow, ControlFlow::Exit) {
+            *flow = ControlFlow::WaitUntil(native.next_wake());
         }
     })
 }

@@ -130,6 +130,13 @@ impl PluginHandler for Handler {
         *self.shared.emitter.lock().unwrap() = Some(emitter.clone());
         match method {
             "lolping/state" => Ok(self.shared.snapshot()),
+            "lolping/releases" => {
+                // Open the fixed project page on the RPC thread, never the
+                // overlay/input event loop. No caller-provided URL or command.
+                crate::links::open_releases()
+                    .map_err(|e| err(format!("openReleasesFailed: {e}")))?;
+                Ok(json!({"opened":true}))
+            }
             "lolping/start"
             | "lolping/stop"
             | "lolping/preview"

@@ -54,25 +54,13 @@ pub fn resolve_asset(root: &Path, data: &Path, raw: &str) -> Option<PathBuf> {
     } else {
         root.join("ui").join(raw)
     };
-    // A local symlink must not turn the private asset protocol into a filesystem reader.
+    // Local symlinks must not let image/audio readers escape the approved asset roots.
     let canonical = candidate.canonicalize().ok()?;
     let allowed = [root.join("ui"), data.join("custom"), pack_dir(data)]
         .iter()
         .filter_map(|p| p.canonicalize().ok())
         .any(|base| canonical.starts_with(base));
     allowed.then_some(canonical)
-}
-pub fn mime(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()).unwrap_or("") {
-        "html" => "text/html; charset=utf-8",
-        "js" => "text/javascript; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "ogg" => "audio/ogg",
-        "wav" => "audio/wav",
-        _ => "application/octet-stream",
-    }
 }
 pub fn library(root: &Path, data: &Path, custom: &Value) -> Vec<Value> {
     library_items(root, data, custom, true)

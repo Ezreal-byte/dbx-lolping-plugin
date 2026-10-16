@@ -1,0 +1,210 @@
+{
+  "version": "0.2.1",
+  "scope": "Isolated native plugin process tree; one desktop, sampled working set includes shared pages. CPU is one-core-equivalent percentage. Active samples are not a maximum-memory guarantee.",
+  "samples": {
+    "started": {
+      "workingSetBytes": 41218048,
+      "privateCommitBytes": 17354752,
+      "cpuSeconds": 0.125,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 27418624,
+          "privateCommitBytes": 14938112,
+          "cpuSeconds": 0.09375
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.015625
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "emote-facepalm": {
+      "workingSetBytes": 49192960,
+      "privateCommitBytes": 24338432,
+      "cpuSeconds": 0.390625,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 35393536,
+          "privateCommitBytes": 21921792,
+          "cpuSeconds": 0.359375
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.015625
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "emote-unworthy_cn": {
+      "workingSetBytes": 49250304,
+      "privateCommitBytes": 24207360,
+      "cpuSeconds": 0.921875,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 35450880,
+          "privateCommitBytes": 21790720,
+          "cpuSeconds": 0.890625
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.015625
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "emote-gg_heart": {
+      "workingSetBytes": 49418240,
+      "privateCommitBytes": 24391680,
+      "cpuSeconds": 1.421875,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 35618816,
+          "privateCommitBytes": 21975040,
+          "cpuSeconds": 1.390625
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.015625
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "customAnimated": {
+      "workingSetBytes": 49774592,
+      "privateCommitBytes": 24760320,
+      "cpuSeconds": 2.0625,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 35975168,
+          "privateCommitBytes": 22343680,
+          "cpuSeconds": 2.015625
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.03125
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "pingWithAudio": {
+      "workingSetBytes": 53919744,
+      "privateCommitBytes": 26087424,
+      "cpuSeconds": 2.359375,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 40120320,
+          "privateCommitBytes": 23670784,
+          "cpuSeconds": 2.3125
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5910528,
+          "privateCommitBytes": 1130496,
+          "cpuSeconds": 0.03125
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7888896,
+          "privateCommitBytes": 1286144,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "idle": {
+      "workingSetBytes": 49287168,
+      "privateCommitBytes": 21766144,
+      "cpuSeconds": 2.546875,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 35549184,
+          "privateCommitBytes": 19468288,
+          "cpuSeconds": 2.484375
+        },
+        {
+          "name": "hook-helper",
+          "workingSetBytes": 5869568,
+          "privateCommitBytes": 1048576,
+          "cpuSeconds": 0.046875
+        },
+        {
+          "name": "conhost",
+          "workingSetBytes": 7868416,
+          "privateCommitBytes": 1249280,
+          "cpuSeconds": 0.015625
+        }
+      ]
+    },
+    "stopped": {
+      "workingSetBytes": 21090304,
+      "privateCommitBytes": 7110656,
+      "cpuSeconds": 2.484375,
+      "processes": [
+        {
+          "name": "lolping-backend",
+          "workingSetBytes": 21090304,
+          "privateCommitBytes": 7110656,
+          "cpuSeconds": 2.484375
+        }
+      ]
+    }
+  },
+  "idleCpuOneCorePercent": 1.0074145712443585,
+  "package": {
+    "target": "windows-x64",
+    "url": "io.dbx.lolping.lite-0.2.1-windows-x64.dbxp",
+    "sha256": "d96ce2d20437ca5c94474146246433788d3037fedeb1a73d8406ae374ce03ee2",
+    "size": 19319153,
+    "unpackedSize": 24772859,
+    "developmentUnsigned": true
+  },
+  "packageContentsVerified": true,
+  "recordedAt": "2026-10-16T14:04:10.418Z",
+  "installedInstanceSnapshot": {
+    "workingSetBytes": 48906240,
+    "privateCommitBytes": 19025920,
+    "scope": "Separately sampled installed DBX 0.2.1 backend and its children during this test; excludes the DBX host and settings UI."
+  }
+}

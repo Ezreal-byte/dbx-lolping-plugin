@@ -1,9 +1,16 @@
-use crate::{assets, audio::Audio, service::Shared, settings};
+use crate::{
+    audio::AudioWorker,
+    render::{
+        media::{Bank, DecoderPool},
+        surface::Surface,
+        Output, Scene,
+    },
+    service::Shared,
+    settings,
+};
 use serde_json::{json, Value};
 use std::{
-    borrow::Cow,
     collections::HashMap,
-    fs,
     io::{BufRead, BufReader, Read, Write},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{mpsc::SyncSender, Arc},
@@ -14,7 +21,7 @@ use tao::{
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     window::{Window, WindowBuilder, WindowId},
 };
-use wry::{WebContext, WebView, WebViewBuilder};
+use tiny_skia::Pixmap;
 
 pub enum UserEvent {
     Control {
@@ -25,7 +32,6 @@ pub enum UserEvent {
     Settings(Value, bool),
     Helper(u64, Value),
     HelperGone(u64),
-    Renderer(WindowId, Value),
     Quit,
 }
 #[derive(Clone, PartialEq)]
@@ -56,87 +62,77 @@ impl Display {
     }
 }
 struct Overlay {
-    webview: WebView,
+    // Surface must drop before its native window; Scene drops streaming receivers.
+    surface: Surface,
+    scene: Scene,
     window: Window,
     display: Display,
     ready: bool,
-    pending_preview: Option<Value>,
-    epoch: u64,
     visible: bool,
-    idle_since: Option<Instant>,
-    low_memory: bool,
-    frames: HashMap<u64, Instant>,
+    pixels: Option<Pixmap>,
+    frames: Vec<Instant>,
     frame_ms: Vec<f64>,
+    next_frame: Instant,
 }
 impl Overlay {
-    fn send(&mut self, name: &str, mut p: Value) {
-        if self.ready {
-            if name == "maintenance" {
-                let _ = self
-                    .webview
-                    .evaluate_script("window.receive('maintenance',null)");
-                return;
+    fn send(&mut self, name: &str, p: Value, pool: &DecoderPool) -> Vec<Output> {
+        let now = Instant::now();
+        if matches!(name, "wheelOpen" | "click" | "preview") {
+            if self.frames.len() >= 128 {
+                self.frames.remove(0);
             }
-            self.epoch += 1;
-            if matches!(name, "wheelOpen" | "click" | "preview") {
-                let dispatched = Instant::now();
-                // Keep the loaded document alive: wake before dispatch, without a cold WebView rebuild.
-                if self.low_memory {
-                    self.memory_low(false);
-                }
-                self.idle_since = None;
-                if !self.visible {
-                    let _ = self.webview.set_visible(true);
-                    self.window.set_visible(true);
-                    self.visible = true;
-                }
-                self.window.set_always_on_top(true);
-                if self.frames.len() >= 128 {
-                    self.frames.clear();
-                }
-                self.frames.insert(self.epoch, dispatched);
-            }
-            if !p.is_object() {
-                p = json!({});
-            }
-            p["_epoch"] = json!(self.epoch);
-            let _ = self
-                .webview
-                .evaluate_script(&format!("window.receive({},{})", json!(name), p));
+            self.frames.push(now);
         }
+        self.scene.event(name, &p, pool, now)
     }
-    fn idle(&mut self, epoch: u64) {
-        // A delayed idle report must never hide a newer wheel or click.
-        if epoch != self.epoch {
-            return;
+    fn tick(&mut self, now: Instant) -> Result<(), String> {
+        if !self.scene.dirty && (!self.scene.animating(now) || now < self.next_frame) {
+            return Ok(());
         }
-        if self.visible {
-            let _ = self.webview.set_visible(false);
-            self.window.set_visible(false);
-            self.visible = false;
-        }
-        self.idle_since.get_or_insert_with(Instant::now);
-    }
-    fn memory_low(&mut self, low: bool) {
-        #[cfg(target_os = "windows")]
+        self.scene.advance(now);
+        let Some(bounds) = self
+            .scene
+            .bounds(self.display.scale, self.display.w, self.display.h)
+        else {
+            if self.visible {
+                self.window.set_visible(false);
+                self.visible = false;
+            }
+            self.surface.clear(&self.window);
+            self.pixels = None;
+            self.scene.release_buffers();
+            self.frames.clear();
+            self.scene.dirty = false;
+            return Ok(());
+        };
+        if self
+            .pixels
+            .as_ref()
+            .is_none_or(|p| p.width() != bounds.w || p.height() != bounds.h)
         {
-            use wry::{MemoryUsageLevel, WebViewExtWindows};
-            let _ = self.webview.set_memory_usage_level(if low {
-                MemoryUsageLevel::Low
-            } else {
-                MemoryUsageLevel::Normal
-            });
+            self.pixels = Some(Pixmap::new(bounds.w, bounds.h).ok_or("nativeSurfaceTooLarge")?);
         }
-        self.low_memory = low;
-    }
-    fn maintain(&mut self) {
-        if !self.low_memory
-            && self
-                .idle_since
-                .is_some_and(|t| t.elapsed() >= Duration::from_secs(15))
-        {
-            self.memory_low(true);
+        let pixels = self.pixels.as_mut().unwrap();
+        self.scene.draw(pixels, bounds, self.display.scale, now);
+        self.surface.present(
+            &self.window,
+            pixels,
+            bounds,
+            (self.display.x, self.display.y),
+        )?;
+        if !self.visible {
+            self.window.set_visible(true);
+            self.window.set_always_on_top(true);
+            self.visible = true;
         }
+        for start in self.frames.drain(..) {
+            if self.frame_ms.len() >= 128 {
+                self.frame_ms.remove(0);
+            }
+            self.frame_ms.push(start.elapsed().as_secs_f64() * 1000.);
+        }
+        self.next_frame = now + Duration::from_micros(16_667);
+        Ok(())
     }
 }
 struct Helper {
@@ -172,43 +168,44 @@ pub struct Native {
     shared: Arc<Shared>,
     proxy: EventLoopProxy<UserEvent>,
     windows: HashMap<WindowId, Overlay>,
-    web_context: WebContext,
+    bank: Option<Arc<Bank>>,
+    decoders: DecoderPool,
     helper: Option<Helper>,
     settings: Value,
     enabled: bool,
     generation: u64,
     wheel: Option<WindowId>,
-    audio: Audio,
+    audio: AudioWorker,
     preview_until: Option<Instant>,
     suspend_until: Option<Instant>,
     last_displays: Vec<Display>,
     last_poll: Instant,
-    ready_until: Option<Instant>,
     pause_reason: Option<&'static str>,
-    last_maintenance: Instant,
 }
 impl Native {
     pub fn new(shared: Arc<Shared>, proxy: EventLoopProxy<UserEvent>) -> Self {
         let settings = shared.store.lock().unwrap().settings.clone();
-        let web_context = WebContext::new(Some(shared.data.join("webview")));
+        let emitter = shared.clone();
+        let audio = AudioWorker::new(shared.root.clone(), shared.data.clone(), move |error| {
+            emitter.emit("lolping/audioError", json!({"error":error}))
+        });
         Self {
             shared,
             proxy,
             settings,
             windows: HashMap::new(),
-            web_context,
+            bank: None,
+            decoders: DecoderPool::new(),
             helper: None,
             enabled: false,
             generation: 0,
             wheel: None,
-            audio: Audio::default(),
+            audio,
             preview_until: None,
             suspend_until: None,
             last_displays: Vec::new(),
             last_poll: Instant::now(),
-            ready_until: None,
             pause_reason: None,
-            last_maintenance: Instant::now(),
         }
     }
     fn displays(target: &EventLoopWindowTarget<UserEvent>) -> Vec<Display> {
@@ -229,6 +226,9 @@ impl Native {
     }
     fn rebuild(&mut self, target: &EventLoopWindowTarget<UserEvent>) -> Result<(), String> {
         let displays = Self::displays(target);
+        if displays.is_empty() {
+            return Err("noDisplay".into());
+        }
         if displays == self.last_displays && !self.windows.is_empty() {
             return Ok(());
         }
@@ -239,7 +239,13 @@ impl Native {
             h.send(json!({"type":"suspend","on":true}))?;
             h.suspended = Some(true);
         }
-        self.ready_until = Some(Instant::now() + Duration::from_secs(15));
+        self.bank.get_or_insert_with(|| {
+            Arc::new(Bank::load(
+                &self.shared.root,
+                &self.shared.data,
+                &self.settings,
+            ))
+        });
         for display in &displays {
             let builder = WindowBuilder::new()
                 .with_title("lolPing Lite overlay")
@@ -250,19 +256,14 @@ impl Native {
                 .with_always_on_top(true)
                 .with_focusable(false)
                 .with_focused(false)
-                .with_inner_size(PhysicalSize::new(
-                    display.w,
-                    if cfg!(target_os = "windows") {
-                        display.h.saturating_sub(1)
-                    } else {
-                        display.h
-                    },
-                ))
+                .with_inner_size(PhysicalSize::new(2, 2))
                 .with_position(PhysicalPosition::new(display.x, display.y));
             #[cfg(target_os = "windows")]
             let builder = {
                 use tao::platform::windows::WindowBuilderExtWindows;
-                builder.with_skip_taskbar(true)
+                builder
+                    .with_skip_taskbar(true)
+                    .with_undecorated_shadow(false)
             };
             #[cfg(target_os = "macos")]
             let builder = {
@@ -283,78 +284,52 @@ impl Native {
                 let _: () = objc2::msg_send![ns,setHidesOnDeactivate:false];
             }
             let id = window.id();
-            let proxy = self.proxy.clone();
-            let root = self.shared.root.clone();
-            let data = self.shared.data.clone();
-            let webview = WebViewBuilder::new_with_web_context(&mut self.web_context)
-                .with_transparent(true)
-                .with_focused(false)
-                .with_clipboard(false)
-                .with_background_throttling(wry::BackgroundThrottlingPolicy::Throttle)
-                .with_custom_protocol("lolping".into(), move |_, request| {
-                    let path = assets::resolve_asset(&root, &data, request.uri().path());
-                    let (status, mime, bytes) =
-                        match path.and_then(|p| fs::read(&p).ok().map(|b| (p, b))) {
-                            Some((p, b)) => (200, assets::mime(&p), b),
-                            None => (404, "text/plain", b"Not found".to_vec()),
-                        };
-                    wry::http::Response::builder()
-                        .status(status)
-                        .header("Content-Type", mime)
-                        .header("Cache-Control", "no-store")
-                        .body(Cow::Owned(bytes))
-                        .unwrap()
-                })
-                .with_navigation_handler(|url| {
-                    url.starts_with("lolping://localhost/")
-                        || url.starts_with("http://lolping.localhost/")
-                })
-                .with_ipc_handler(move |request| {
-                    if request.body().len() < 8192 {
-                        if let Ok(v) = serde_json::from_str(request.body()) {
-                            let _ = proxy.send_event(UserEvent::Renderer(id, v));
-                        }
-                    }
-                })
-                .with_url("lolping://localhost/overlay/index.html")
-                .build(&window)
-                .map_err(|e| e.to_string())?;
-            window.set_visible(true);
+            let surface = Surface::new(&window)?;
+            let scene = Scene::new(
+                self.shared.root.clone(),
+                self.shared.data.clone(),
+                self.settings.clone(),
+                self.bank.as_ref().unwrap().clone(),
+            );
             self.windows.insert(
                 id,
                 Overlay {
-                    webview,
+                    surface,
+                    scene,
                     window,
                     display: display.clone(),
-                    ready: false,
-                    pending_preview: None,
-                    epoch: 0,
-                    visible: true,
-                    idle_since: None,
-                    low_memory: false,
-                    frames: HashMap::new(),
+                    ready: true,
+                    visible: false,
+                    pixels: None,
+                    frames: Vec::new(),
                     frame_ms: Vec::new(),
+                    next_frame: Instant::now(),
                 },
             );
         }
         self.last_displays = displays;
+        self.shared.emit(
+            "lolping/overlayReady",
+            json!({"count":self.windows.len(),"renderer":"native"}),
+        );
+        self.sync_helper();
         Ok(())
     }
     fn all(&mut self, event: &str, value: Value) {
         for w in self.windows.values_mut() {
-            w.send(event, value.clone());
+            w.send(event, value.clone(), &self.decoders);
         }
     }
     fn stop(&mut self) {
         self.helper = None;
         self.windows.clear();
+        self.bank = None;
         self.last_displays.clear();
         self.audio.clear();
         self.wheel = None;
         self.enabled = false;
         self.preview_until = None;
         self.suspend_until = None;
-        self.ready_until = None;
         self.pause_reason = None;
         self.shared.status("stopped", false, None);
     }
@@ -448,7 +423,7 @@ impl Native {
                 Ok(json!({"state":"stopped","enabled":false}))
             }
             "lolping/diagnostics" => Ok(
-                json!({"windows":self.windows.len(),"readyWindows":self.windows.values().filter(|w|w.ready).count(),"visibleWindows":self.windows.values().filter(|w|w.visible).count(),"lowMemoryWindows":self.windows.values().filter(|w|w.low_memory).count(),"frameMs":self.windows.values().flat_map(|w|w.frame_ms.iter().copied()).collect::<Vec<_>>(),"audioCacheBytes":self.audio.cached_bytes(),"helperConfigWrites":self.helper.as_ref().map(|h|h.config_updates),"helperPid":self.helper.as_ref().map(|h|h.child.id()),"enabled":self.enabled}),
+                json!({"windows":self.windows.len(),"readyWindows":self.windows.values().filter(|w|w.ready).count(),"visibleWindows":self.windows.values().filter(|w|w.visible).count(),"lowMemoryWindows":self.windows.values().filter(|w|w.pixels.is_none()).count(),"renderer":"native","systemFrames":self.windows.values().map(|w|w.surface.system_frame(&w.window)).collect::<Vec<_>>(),"surfaceBytes":self.windows.values().map(|w|w.surface.bytes()+w.pixels.as_ref().map_or(0,|p|p.data().len())).sum::<usize>(),"imageBytes":self.bank.as_ref().map_or(0,|b|b.bytes()),"frameMetric":"dispatchToNativeSubmit","frameMs":self.windows.values().flat_map(|w|w.frame_ms.iter().copied()).collect::<Vec<_>>(),"audioCacheBytes":self.audio.cached_bytes(),"helperConfigWrites":self.helper.as_ref().map(|h|h.config_updates),"helperPid":self.helper.as_ref().map(|h|h.child.id()),"enabled":self.enabled}),
             ),
             "lolping/pause" => {
                 if self.helper.is_none() {
@@ -502,7 +477,7 @@ impl Native {
                 if self.helper.is_none() {
                     self.preview_until = Some(Instant::now() + Duration::from_secs(10));
                 }
-                // Queueing through the renderer's ready handshake also supports the very first preview.
+                // Native surfaces are ready synchronously, including the very first preview.
                 let primary = target.primary_monitor().map(|m| m.position());
                 let selected = self
                     .windows
@@ -515,30 +490,37 @@ impl Native {
                     .ok_or("noDisplay")?;
                 let window = self.windows.get_mut(&selected).unwrap();
                 let message = json!({"id":id,"wheel":if emote{"emote"}else{"ping"},"x":window.display.w as f64/window.display.scale/2.,"y":window.display.h as f64/window.display.scale/2.});
-                if window.ready {
-                    window.send("preview", message);
-                } else {
-                    window.pending_preview = Some(message);
-                }
+                self.dispatch(selected, "preview", message);
                 Ok(json!({"ok":true}))
             }
             _ => Err("unknownControl".into()),
         }
     }
     pub fn refresh(&mut self, s: Value, library_changed: bool) {
+        let art_changed = library_changed
+            || self.settings["emoteWheel"] != s["emoteWheel"]
+            || self.settings["clickEmoteId"] != s["clickEmoteId"];
         self.settings = s;
+        if art_changed && self.bank.is_some() {
+            self.bank = Some(Arc::new(Bank::load(
+                &self.shared.root,
+                &self.shared.data,
+                &self.settings,
+            )));
+        }
         if library_changed {
             self.audio.invalidate_custom();
             self.all("library", Value::Null);
         }
-        self.all("settings", self.settings.clone());
+        if let Some(bank) = &self.bank {
+            for w in self.windows.values_mut() {
+                w.scene.settings(self.settings.clone(), bank.clone());
+            }
+        }
         self.sync_helper();
     }
     fn sync_helper(&mut self) {
         let ready = !self.windows.is_empty() && self.windows.values().all(|w| w.ready);
-        if ready {
-            self.ready_until = None;
-        }
         if let Some(h) = &mut self.helper {
             if !h.ready {
                 return;
@@ -574,40 +556,21 @@ impl Native {
             }
         }
     }
-    pub fn renderer(&mut self, id: WindowId, v: Value) {
+    fn dispatch(&mut self, id: WindowId, name: &str, p: Value) {
+        let outputs = if let Some(w) = self.windows.get_mut(&id) {
+            w.send(name, p, &self.decoders)
+        } else {
+            return;
+        };
+        for output in outputs {
+            match output {
+                Output::Sound(key) => self.renderer(id, json!({"type":"sound","key":key})),
+                Output::Selected => self.renderer(id, json!({"type":"selected"})),
+            }
+        }
+    }
+    fn renderer(&mut self, id: WindowId, v: Value) {
         match v["type"].as_str().unwrap_or("") {
-            "idle" => {
-                if let Some(w) = self.windows.get_mut(&id) {
-                    w.idle(v["epoch"].as_u64().unwrap_or(u64::MAX));
-                }
-            }
-            "frame" => {
-                if let Some(w) = self.windows.get_mut(&id) {
-                    if let Some(start) = v["epoch"]
-                        .as_u64()
-                        .and_then(|epoch| w.frames.remove(&epoch))
-                    {
-                        if w.frame_ms.len() >= 128 {
-                            w.frame_ms.remove(0);
-                        }
-                        w.frame_ms.push(start.elapsed().as_secs_f64() * 1000.);
-                    }
-                }
-            }
-            "ready" => {
-                if let Some(w) = self.windows.get_mut(&id) {
-                    w.ready = true;
-                    w.send("settings", self.settings.clone());
-                    if let Some(p) = w.pending_preview.take() {
-                        w.send("preview", p);
-                    }
-                }
-                self.shared.emit(
-                    "lolping/overlayReady",
-                    json!({"count":self.windows.values().filter(|w|w.ready).count()}),
-                );
-                self.sync_helper();
-            }
             "sound" => {
                 let key = v["key"].as_str().unwrap_or("");
                 let volume = if self.settings["muted"] == true {
@@ -636,7 +599,7 @@ impl Native {
             "selected" => {
                 for (other, w) in &mut self.windows {
                     if *other != id {
-                        w.send("clear", json!(null));
+                        w.send("clear", json!(null), &self.decoders);
                     }
                 }
             }
@@ -710,7 +673,7 @@ impl Native {
                         let mut p = v.clone();
                         p["x"] = json!(x);
                         p["y"] = json!(y);
-                        w.send(kind, p);
+                        self.dispatch(id, kind, p);
                     }
                 }
                 if kind == "wheelRelease" {
@@ -729,15 +692,30 @@ impl Native {
             self.fail("helperExited".into());
         }
     }
+    pub fn next_wake(&self) -> Instant {
+        let now = Instant::now();
+        let mut wake = now + Duration::from_millis(500);
+        for w in self.windows.values() {
+            if w.scene.dirty {
+                return now;
+            }
+            if w.scene.animating(now) {
+                wake = wake.min(w.next_frame);
+            }
+        }
+        wake
+    }
     pub fn tick(&mut self, target: &EventLoopWindowTarget<UserEvent>) {
+        for w in self.windows.values_mut() {
+            if let Err(e) = w.tick(Instant::now()) {
+                self.fail(e);
+                return;
+            }
+        }
         if self.last_poll.elapsed() < Duration::from_millis(500) {
             return;
         }
         self.last_poll = Instant::now();
-        if self.ready_until.is_some_and(|t| Instant::now() >= t) {
-            self.fail("overlayTimeout".into());
-            return;
-        }
         if self.suspend_until.is_some_and(|t| Instant::now() >= t) {
             self.suspend_until = None;
             self.sync_helper();
@@ -746,6 +724,7 @@ impl Native {
             self.preview_until = None;
             if self.helper.is_none() {
                 self.windows.clear();
+                self.bank = None;
                 self.audio.clear();
                 self.last_displays.clear();
             }
@@ -756,14 +735,6 @@ impl Native {
             if let Err(e) = self.rebuild(target) {
                 self.fail(e);
             }
-        }
-        for w in self.windows.values_mut() {
-            w.maintain();
-        }
-        self.audio.maintain();
-        if self.last_maintenance.elapsed() >= Duration::from_secs(30) {
-            self.last_maintenance = Instant::now();
-            self.all("maintenance", Value::Null);
         }
     }
 }

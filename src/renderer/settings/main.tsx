@@ -94,7 +94,7 @@ function App(){
   const shortcut=[(settings.toggleHotkey.mods&1)?'Ctrl':'',(settings.toggleHotkey.mods&2)?'Alt':'',(settings.toggleHotkey.mods&4)?'Shift':'',(settings.toggleHotkey.mods&8)?(state?.platform==='mac'?'⌘':'Win'):'',vkLabel(settings.toggleHotkey.vk,state?.platform??'win')].filter(Boolean).join(' + ');
   const paused=state?.status.state==='running'&&!state.status.enabled;
   const capturePaused=state?.status.pauseReason==='capture';
-  return <div className="app"><main><header><div className="heading"><img className="plugin-icon" src={__PLUGIN_ICON__} alt=""/><div><h1>{t.title}<span className="version">{state?.version??'0.1.1'}</span></h1><p>{t.subtitle}</p></div></div>
+  return <div className="app"><main><header><div className="heading"><img className="plugin-icon" src={__PLUGIN_ICON__} alt=""/><div><h1>{t.title}<span className="version">{state?.version??'0.2.1'}</span></h1><p>{t.subtitle}</p></div></div>
       <button className={state?.status.state==='running'||state?.status.state==='starting'?'danger':'primary'} disabled={!state||busy} onClick={()=>void act(state?.status.state==='running'||state?.status.state==='starting'?'stop':'start')}>{state?.status.state==='running'||state?.status.state==='starting'?t.stop:t.start}</button></header>
       <section className="status-card"><div className={`status-dot ${paused?'paused':state?.status.enabled?'active':''}`}/><div className="status-content"><strong role="status">{state?t[paused?(capturePaused?'capturePaused':'paused'):state.status.state]:t.loading}</strong><p>{paused?(capturePaused?t.capturePauseHelp:`${t.resumeHelp} ${shortcut}`):state?.status.state==='stopped'?t.stoppedHelp:t.intro}</p><p className="muted">{t.lifecycle}</p>
         {state?.status.state==='running'&&<div className="actions"><button disabled={busy||capturePaused} onClick={()=>void act('pause',{on:!paused})}>{paused?t.resume:t.pause}</button><span className="muted">{t.toggle}: {shortcut}</span></div>}
@@ -115,7 +115,7 @@ function App(){
         </div><h3>{t.wheel}</h3><div className="slot-grid">{settings.wheel.map((id,i)=><label key={i}><span>{t.slots[i]}</span>{pingSelect(id,v=>chooseSlot('wheel',i,v),`${t.wheel} ${t.slots[i]}`)}</label>)}</div>
       </section>
       <section id="emotes"><h2>{t.emotes}</h2><p className="muted">{state?.extraPackInstalled?t.packInstalled:t.packHint}</p>
-        <div className="actions"><button onClick={()=>imageInput.current?.click()}>{t.addImage}</button><button disabled={state?.extraPackInstalled} onClick={()=>packInput.current?.click()}>{t.importPack}</button></div>
+        <div className="actions"><button onClick={()=>imageInput.current?.click()}>{t.addImage}</button><button disabled={state?.extraPackInstalled} onClick={()=>packInput.current?.click()}>{t.importPack}</button><button onClick={()=>void act('releases')}>{t.downloadPack}</button></div>
         <input hidden ref={imageInput} type="file" accept=".png,.jpg,.jpeg,.gif,.webp" onChange={e=>void importFile(e.target.files?.[0],'image')}/>
         <input hidden ref={packInput} type="file" accept=".zip" onChange={e=>void importFile(e.target.files?.[0],'pack')}/>
         <input hidden ref={soundInput} type="file" accept=".wav,.ogg,.mp3" onChange={e=>void importFile(e.target.files?.[0],'sound')}/>

@@ -35,7 +35,8 @@ try {
     await rpc.request('lolping/preview', { id: 'danger', wheel: 'ping' });
     let d = await rpc.request('lolping/diagnostics'); assert.ok(d.windows > 0);
     await rpc.waitFor(e => e.method === 'lolping/overlayReady' && e.params.count === d.windows);
-    d = await rpc.request('lolping/diagnostics'); assert.equal(d.windows, d.readyWindows); assert.equal(d.helperPid, null); results.push('real WebView overlays load on every display without input hooks for preview');
+    d = await rpc.request('lolping/diagnostics'); assert.equal(d.windows, d.readyWindows); assert.equal(d.helperPid, null); assert.equal(d.renderer,'native'); results.push('native overlays initialize on every display without input hooks for preview');
+    if(process.platform==='win32') assert.deepEqual(d.systemFrames,Array(d.windows).fill(false),'DWM must not decorate transparent surfaces');
     await rpc.request('lolping/start'); await rpc.waitFor(e => e.method === 'lolping/status' && e.params.state === 'running');
     d = await rpc.request('lolping/diagnostics'); assert.ok(d.helperPid > 0); const pid = d.helperPid;
     await rpc.request('lolping/start'); d = await rpc.request('lolping/diagnostics'); assert.equal(d.helperPid, pid);
@@ -52,6 +53,10 @@ try {
     await waitForDiagnostics(d=>d.visibleWindows===0&&d.lowMemoryWindows===d.windows);
     for(let i=0;i<12;i++)await rpc.request('lolping/preview',{id:'danger',wheel:'ping'});
     d=await waitForDiagnostics(d=>d.frameMs.length>=12);assert.ok(d.visibleWindows>0);assert.equal(d.helperPid,pid);
+    if(process.platform==='win32') {
+      assert.deepEqual(d.systemFrames,Array(d.windows).fill(false),'DWM decoration must stay disabled after idle/wake and resize');
+      results.push('Windows system frames remain disabled through show, hide, resize and wake');
+    }
     await rpc.request('lolping/pause',{on:true});await waitForDiagnostics(d=>d.visibleWindows===0);
     await rpc.request('lolping/pause',{on:false});
     results.push('hidden idle overlays wake without recreation, acknowledge burst frames, and clear on pause');

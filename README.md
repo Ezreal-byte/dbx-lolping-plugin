@@ -1,22 +1,22 @@
 # lolPing Lite · DBX plugin
 
-Desktop-wide pings and local emotes, controlled from a DBX workbench. Rust uses the system WebView and native audio; the upstream C++ helper handles input. No Electron runtime, rooms, LAN discovery, relays, telemetry or automatic downloads are included.
+Desktop-wide pings and local emotes, controlled from a DBX workbench. Rust draws the overlay directly into native transparent windows and plays audio; the upstream C++ helper handles input. The overlay has no WebView, browser subprocesses or Electron runtime. No rooms, LAN discovery, relays, telemetry or automatic downloads are included.
 
-Plugin ID: **`io.dbx.lolping.lite`**. Based on [darrenprx/lolPing](https://github.com/darrenprx/lolPing), pinned to [`b947aab8d379015687117544191160bd82141954`](https://github.com/darrenprx/lolPing/tree/b947aab8d379015687117544191160bd82141954). Thanks to Darren and the upstream contributors for the input engine, wheel, animations, tests and original app icon. [中文说明](README.zh-CN.md)
+Plugin ID: **`io.dbx.lolping.lite`**. Based on [darrenprx/lolPing](https://github.com/darrenprx/lolPing), pinned to [`b947aab8d379015687117544191160bd82141954`](https://github.com/darrenprx/lolPing/tree/b947aab8d379015687117544191160bd82141954). Thanks to Darren and the upstream contributors for the input engine, wheel, animations and tests. The plugin icon is the upstream Riot-owned `enemy_missing.png` question mark. [中文说明](README.zh-CN.md)
 
 ## Install
 
-Version 0.1.1 adds idle overlay memory management, bounded animation/audio caches, coalesced settings saves and explicit Pause/Resume controls. See [measured results and validation limits](docs/validation-0.1.1.md).
+Version 0.2.1 replaces the WebView overlay with native Rust rendering, fixes Windows frame artifacts and improves wheel typography. DBX still hosts the React settings page, now with an emote-pack download button. Windows single-desktop samples were approximately 39–52 MiB for the plugin process tree, excluding DBX and its settings UI. Existing settings and assets remain compatible; see [validation and measurement limits](docs/validation-0.2.1.md).
 
 Enable development package installation in DBX Plugin Center settings and select the platform `.dbxp`. These are unsigned development candidates; a repository operator must sign marketplace releases. Open Desktop pings and press Start. Hold Alt/Option and drag to ping, Ctrl for emotes, Ctrl+Alt+P to pause/resume. Closing the settings tab keeps the service running. Stop releases all listeners and overlay windows; quitting DBX ends the plugin. A new DBX session requires manually starting it again.
 
-Nine default emotes ship in the core package. Import the optional `lolping-extra-emotes-1.zip` in settings to add the remaining 35 without network access. Up to 24 custom PNG/JPEG/GIF/WebP images are supported: static input ≤8 MiB; animation ≤5 MiB and ≤1024 pixels per side. Custom WAV/OGG/MP3 audio is limited to 1 MiB and 5 seconds.
+Nine default emotes ship in the core package. Click **Download on GitHub** beside **Import extra emote pack**, download `lolping-extra-emotes-1.zip` from Release Assets, then import it in settings to add the remaining 35. Import works offline. Up to 24 custom PNG/JPEG/GIF/WebP images are supported: static input ≤8 MiB; animation ≤5 MiB and ≤1024 pixels per side. Custom WAV/OGG/MP3 audio is limited to 1 MiB and 5 seconds.
 
 macOS requires Accessibility permission. Use the settings button to open the system pane, allow lolPing Lite / DBX, then retry. The macOS backend and helper reside in an app bundle. Local builds use ad-hoc signing unless `LOLPING_SIGN_IDENTITY` is set; updates may require renewed permission. Ad-hoc builds are not notarized.
 
 ## Build and test
 
-Requires Node.js 22, Rust, CMake and the native C++ compiler (Visual Studio Build Tools on Windows; Xcode Command Line Tools on macOS). Targets are Windows x64 and macOS Apple Silicon. Windows also needs Microsoft WebView2 Runtime. Linux and Intel Mac are not supported in this version.
+Requires Node.js 22, Rust, CMake and the native C++ compiler (Visual Studio Build Tools on Windows; Xcode Command Line Tools on macOS). Targets are Windows x64 and macOS Apple Silicon. The plugin overlay does not require WebView2 or WKWebView. Linux and Intel Mac are not supported in this version.
 
 ```sh
 npm ci --ignore-scripts
@@ -38,9 +38,9 @@ Development settings use `http://127.0.0.1:4178` with the real sidecar and a loc
 
 The workflow in `.github/workflows/build.yml` builds Windows x64 (`windows-2022`) and macOS arm64 (`macos-15`) on push, pull requests and manual dispatch. Each job checks architecture, runs all language tests, builds release binaries, packages and verifies the `.dbxp`, then runs protocol/resource smoke tests without desktop input hooks. Artifacts contain the platform package, size/SHA-256 metadata, offline emote pack and reports, retained for 30 days. Mac components receive ad-hoc signing; DBX marketplace signing and Apple notarization are separate release steps.
 
-Download builds from this repository's Actions artifacts or [Releases](https://github.com/Ezreal-byte/dbx-lolping-plugin/releases). The current Windows validation record is in `docs/validation-2026-10-16.md`. Release package hashes are recorded in `release-candidates.json` and platform `.artifact.json` assets.
+Download builds from this repository's Actions artifacts or [Releases](https://github.com/Ezreal-byte/dbx-lolping-plugin/releases). The current validation and Windows memory samples are in `docs/validation-0.2.1.md`. Release package hashes are recorded in `release-candidates.json` and platform `.artifact.json` assets.
 
-The `backend/` directory implements framed DBX RPC, persistence, checked uploads, native audio and overlay windows. `src/renderer/` contains React settings and the reused TypeScript/SVG/DOM renderer. `native/hook-helper/` retains the upstream input state machine, with UTF-8 compiler flags and a macOS permission-request entry point. `resources/` holds the pinned assets and their hashes.
+The `backend/` directory implements framed DBX RPC, persistence, checked uploads, native audio and overlay windows. `backend/src/render/` uses tiny-skia for vector art, bounded sprite storage, fixed-point image composition and two background animation decoders. Windows presents premultiplied pixels through UpdateLayeredWindow; macOS uses CoreGraphics images in a CALayer. Only the current scene bounds have a surface; idle windows release their drawing buffers. `src/renderer/` contains the React settings page. `native/hook-helper/` retains the upstream input state machine, with UTF-8 compiler flags and a macOS permission-request entry point. `resources/` holds the pinned assets and their hashes.
 
 RPC methods use the `lolping/` prefix: `state`, `start`, `stop`, `pause` (`on` boolean), `settings`, `preview`, `suspend`, `permission`, `diagnostics`, `emote/remove`, `upload/begin`, `upload/cancel`, `upload/commit`. `lolping/settings` events carry `{settings}`; `lolping/library` events tell settings pages to refresh the resource list. Runtime status includes `pauseReason` (`manual`, `shortcut`, `capture` or null). Upload chunks use `upload/<id>` binary channels, an 8-byte big-endian offset and ≤512 KiB payload. Wait for the `lolping/upload` event acknowledgment before sending the next chunk. Settings and imported data reside in `DBX_PLUGIN_DATA_DIR`.
 

@@ -1,5 +1,5 @@
-// A real Windows WebView probe; no synthetic OS input or changes to installed plugin data.
-// Frame timing is dispatch -> renderer animation-frame ACK, not hardware input-to-photon latency.
+// A real Windows overlay probe; no synthetic OS input or changes to installed plugin data.
+// WebView builds measure rAF ACK; native builds measure surface submission. Neither measures scanout.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -29,6 +29,9 @@ try{
     await sleep(200);d=await rpc.request('lolping/diagnostics');assert.equal(d.frameMs.length,initialFrames+25,'Every repeated signal must render');
     const warm=d.frameMs.slice(initialFrames+1).sort((a,b)=>a-b);
     report.warmFrames={count:warm.length,p50Ms:warm[Math.floor(warm.length*.5)],p95Ms:warm[Math.floor(warm.length*.95)],maxMs:warm.at(-1)};
+    report.renderer=d.renderer||'webview';report.frameMetric=d.frameMetric||'dispatchToAnimationFrame';
+    report.diagnostics=d;
+    mkdirSync('dist',{recursive:true});writeFileSync(`dist/performance-${rpc.manifest.version}-report.json`,JSON.stringify(report,null,2));
     assert.ok(report.firstIdleWakeFrameMs<100,'Idle wake exceeded 100ms frame-ACK regression budget');
     assert.ok(report.warmFrames.p95Ms<80,'Repeated frame ACK exceeded 80ms regression budget');
   }
