@@ -1,0 +1,8 @@
+node_modules/
+backend/target/
+native/hook-helper/build/
+ui/
+dist/
+.stage/
+.test-data/
+*.log

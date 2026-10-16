@@ -1,0 +1,37 @@
+{
+  "name": "dbx-lolping-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs",
+    "build:helper": "node native/hook-helper/run.mjs build",
+    "test:helper": "node native/hook-helper/run.mjs test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:backend": "cargo build --release --manifest-path backend/Cargo.toml",
+    "test:backend": "cargo test --manifest-path backend/Cargo.toml",
+    "build": "npm run build:ui && npm run build:helper && npm run build:backend",
+    "package": "node scripts/package.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:dbx": "node scripts/dev-dbx.mjs"
+  },
+  "dependencies": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "esbuild": "0.25.12",
+    "fflate": "0.8.2",
+    "jsdom": "26.1.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

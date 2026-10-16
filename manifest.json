@@ -1,0 +1,25 @@
+{
+  "manifest_version": 1,
+  "id": "io.dbx.lolping.lite",
+  "name": "lolPing Lite",
+  "version": "0.1.0",
+  "publisher": "ezreal-byte",
+  "description": "Local desktop pings and emotes. Start and stop from DBX.",
+  "icon": "assets/plugin.png",
+  "permissions": ["host.events", "host.binary"],
+  "engines": { "dbx": ">=0.5.68", "host_api": "1" },
+  "entrypoints": {
+    "backend": { "executable": "bin/lolping-backend", "transport": "stdio-framed" },
+    "ui": { "root": "ui", "entry": "ui/index.html" }
+  },
+  "contributions": [
+    { "type": "workbench", "id": "io.dbx.lolping.lite.settings", "label": "Desktop pings", "icon": "assets/plugin.png" }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "lolPing 轻量版",
+      "description": "本地桌面信号与表情，在 DBX 中启动和停止。",
+      "contributions": { "io.dbx.lolping.lite.settings": { "label": "桌面信号" } }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+name: Build Windows and macOS plugins
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: windows-x64
+            arch: x64
+          - os: macos-15
+            target: darwin-arm64
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          architecture: ${{ matrix.arch }}
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: Verify runner architecture
+        run: node -e "if (process.arch !== '${{ matrix.arch }}') throw Error('Unexpected runner architecture ' + process.arch)"
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:helper
+      - run: cargo test --locked --manifest-path backend/Cargo.toml
+      - run: npm run build:ui
+      - run: cargo build --release --locked --manifest-path backend/Cargo.toml
+      - name: Package platform plugin and offline emotes
+        run: npm run package
+      - run: node scripts/verify-package.mjs
+      # macOS CI cannot grant Accessibility or validate fullscreen desktop behavior.
+      - run: node scripts/smoke.mjs --no-desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lolping-lite-${{ matrix.target }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+          path: |
+            dist/*.dbxp
+            dist/*.artifact.json
+            dist/*.zip
+            dist/*report.json
