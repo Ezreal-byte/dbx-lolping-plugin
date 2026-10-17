@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "io.dbx.lolping.lite",
   "name": "lolPing Lite",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "ezreal-byte",
   "description": "Local desktop pings and emotes. Start and stop from DBX.",
   "icon": "assets/plugin.png",

@@ -78,6 +78,12 @@ struct Overlay {
     next_frame: Instant,
 }
 impl Overlay {
+    fn raise(&self) -> Result<(), String> {
+        self.window.set_always_on_top(true);
+        #[cfg(target_os = "windows")]
+        self.surface.reset_clip_region(&self.window)?;
+        Ok(())
+    }
     fn send(&mut self, name: &str, p: Value, pool: &DecoderPool) -> Vec<Output> {
         let now = Instant::now();
         if matches!(name, "wheelOpen" | "click" | "preview") {
@@ -125,7 +131,7 @@ impl Overlay {
         )?;
         if !self.visible {
             self.window.set_visible(true);
-            self.window.set_always_on_top(true);
+            self.raise()?;
             self.visible = true;
         }
         for start in self.frames.drain(..) {
@@ -671,7 +677,11 @@ impl Native {
                     if let Some(w) = self.windows.get_mut(&id) {
                         let (x, y) = w.display.local(x, y, cfg!(target_os = "macos"));
                         if kind == "wheelOpen" || kind == "click" {
-                            w.window.set_always_on_top(true);
+                            if let Err(error) = w.raise() {
+                                self.stop();
+                                self.shared.status("failed", false, Some(error));
+                                return;
+                            }
                         }
                         let mut p = v.clone();
                         p["x"] = json!(x);

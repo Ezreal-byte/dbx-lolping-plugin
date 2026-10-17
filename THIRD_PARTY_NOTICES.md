@@ -9,3 +9,5 @@ DBX plugin SDK is vendored under vendor/dbx-plugin-sdk; see its Cargo.toml, READ
 Ogg Opus emotes are decoded by libopus through the `opus` and `opusic-sys` Rust crates; the `ogg` crate demultiplexes their packets. libopus copyright and redistribution terms are reproduced in `licenses/opus-COPYING`. Original sound files are shipped unchanged.
 
 Native overlay labels use the unmodified Inter 4.1 font by The Inter Project Authors, embedded in the backend under the SIL Open Font License 1.1. See `licenses/Inter-OFL.txt` and `backend/resources/README.md` for its source and checksum. `ttf-parser` (MIT/Apache-2.0) converts the fixed labels to cached vector outlines.
+
+Settings navigation and action icons use Microsoft Fluent System Icons, sourced from `@fluentui/react-icons` 2.0.343 (MIT, copyright © 2020 Microsoft Corporation). The unchanged SVG paths were rasterized into transparent PNGs and are tinted with the DBX host theme at display time. See `resources/settings-icons/README.md` and `sources.json` for provenance, and `licenses/Fluent-System-Icons-MIT.txt` for the complete license. Settings text continues to use the host system fonts.

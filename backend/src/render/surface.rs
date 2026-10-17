@@ -117,6 +117,19 @@ mod platform {
             };
             (result >= 0).then_some(enabled != 0)
         }
+        pub fn reset_clip_region(&self, window: &Window) -> Result<(), String> {
+            // DWM's corner preference does not remove an explicit HWND region.
+            // Geometry and visibility style changes can restore a rounded region;
+            // the uploaded alpha channel must be the only source of transparency.
+            if unsafe { SetWindowRgn(window.hwnd() as _, ptr::null_mut(), 0) } == 0 {
+                Err(format!(
+                    "clearOverlayRegion: {}",
+                    std::io::Error::last_os_error()
+                ))
+            } else {
+                Ok(())
+            }
+        }
         pub fn present(
             &mut self,
             window: &Window,
@@ -195,6 +208,7 @@ mod platform {
                     {
                         return Err(std::io::Error::last_os_error().to_string());
                     }
+                    self.reset_clip_region(window)?;
                 }
                 if UpdateLayeredWindow(
                     window.hwnd() as _,

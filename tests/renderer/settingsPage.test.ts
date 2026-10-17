@@ -1,21 +1,28 @@
 // @vitest-environment jsdom
 import { expect, test, vi } from 'vitest';
 import { act } from 'react';
-import { DEFAULT_SETTINGS } from '../../src/shared/settings';
+import { DEFAULT_SETTINGS, type Settings } from '../../src/shared/settings';
 import type { Host, State } from '../../src/renderer/settings/api';
-test('settings events update controls without reloading thumbnails; pause and capture states are explicit',async()=>{
+test('tabs preserve edits, race protection, explicit pause states, wheel assignment and plugin-only controls',async()=>{
   vi.resetModules();
   vi.stubGlobal('__PING_ICONS__',{});vi.stubGlobal('__PLUGIN_ICON__','icon.png');vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
   document.body.innerHTML='<div id="root"></div>';
-  const state:State={status:{state:'running',enabled:true,error:null,pauseReason:null},settings:structuredClone(DEFAULT_SETTINGS),emotes:[],platform:'win',extraPackInstalled:false,version:'0.1.1'};
+  const custom={id:'c:0123456789abcdef0123456789abcdef',name:'Custom',animated:false};
+  const state:State={status:{state:'running',enabled:true,error:null,pauseReason:null},settings:{...structuredClone(DEFAULT_SETTINGS),customEmotes:[custom]},emotes:[{...custom,custom:true,thumbnail:'data:image/png;base64,AA=='}],platform:'win',extraPackInstalled:false,version:'0.3.0'};
   const listeners=new Set<Parameters<Host['onEvent']>[0]>();
-  const invoke=vi.fn(async()=>structuredClone(state));
+  const invoke=vi.fn(async(method:string,params?:unknown):Promise<unknown>=>{if(method==='lolping/settings'){state.settings={...state.settings,...params as Partial<Settings>};return structuredClone(state.settings);}return structuredClone(state);});
   window.dbxPlugin={ready:Promise.resolve(),locale:'zh-CN',invoke,sendBinary:async()=>{},onEvent:l=>{listeners.add(l);return()=>{listeners.delete(l);};}};
   await act(async()=>{await import('../../src/renderer/settings/main');});
   expect(invoke).toHaveBeenCalledTimes(1);
-  await act(async()=>{for(const l of listeners)l({method:'lolping/settings',params:{settings:{...state.settings,volume:35}}});});
-  expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('35');expect(invoke).toHaveBeenCalledTimes(1);
   const button=(text:string)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text)!;
+  const openTab=async(id:string)=>act(async()=>{document.getElementById(`tab-${id}`)!.click();});
+  expect(document.querySelectorAll('[role="tab"]')).toHaveLength(6);
+  expect(document.getElementById('tab-trigger')?.getAttribute('aria-selected')).toBe('true');
+  expect(document.querySelector('input[aria-label="拖动阈值"]')).not.toBeNull();
+  // A settings event updates hidden pages without re-fetching their thumbnails.
+  await act(async()=>{for(const l of listeners)l({method:'lolping/settings',params:{settings:{...state.settings,volume:35}}});});
+  await openTab('sound');
+  expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('35');expect(invoke).toHaveBeenCalledTimes(1);
   await act(async()=>{button('暂停').click();});expect(invoke).toHaveBeenLastCalledWith('lolping/pause',{on:true});
   await act(async()=>{for(const l of listeners)l({method:'lolping/status',params:{...state.status,enabled:false,pauseReason:'manual'}});});
   expect(document.body.textContent).toContain('已暂停');expect(button('恢复')).toBeDefined();expect(document.body.textContent).toContain('Ctrl + Alt + P');
@@ -27,11 +34,52 @@ test('settings events update controls without reloading thumbnails; pause and ca
   await act(async()=>{finish(structuredClone(state));});
   expect((document.querySelector('input[aria-label="音量"]') as HTMLInputElement).value).toBe('80');
   expect(invoke).toHaveBeenLastCalledWith('lolping/state',{});
+  await openTab('emotes');
   expect(document.body.textContent).toContain('lolping-extra-emotes-1.zip');
   await act(async()=>{button('去 GitHub 下载 ↗').click();});
   expect(invoke).toHaveBeenLastCalledWith('lolping/releases',{});
   invoke.mockRejectedValueOnce(new Error('openReleasesFailed'));
   await act(async()=>{button('去 GitHub 下载 ↗').click();});
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('github.com/Ezreal-byte/dbx-lolping-plugin/releases');
+  // Choosing a wheel asset saves configuration without firing a desktop ping.
+  await openTab('wheel');
+  const callsBeforeSame=invoke.mock.calls.length;
+  await act(async()=>{(document.querySelector('[aria-label="分配 危险"]') as HTMLButtonElement).click();});
+  expect(invoke).toHaveBeenCalledTimes(callsBeforeSame);
+  await act(async()=>{(document.querySelector('[aria-label="分配 推进"]') as HTMLButtonElement).click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/settings',{wheel:['push','danger',...DEFAULT_SETTINGS.wheel.slice(2)]});
+  expect(invoke.mock.calls.filter(([method])=>method==='lolping/preview')).toHaveLength(0);
+  const scroll=document.querySelector('.content-scroll') as HTMLDivElement;
+  scroll.scrollTop=120;
+  await openTab('trigger');
+  expect(scroll.scrollTop).toBe(0);
+  await openTab('wheel');
+  expect(scroll.scrollTop).toBe(120);
+  expect(document.querySelector('[aria-label="分配 推进"]')?.getAttribute('aria-pressed')).toBe('true');
+  await act(async()=>{document.querySelector('[role="button"][aria-label^="中心 ·"]')!.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
+  await act(async()=>{(document.querySelector('[aria-label="分配 推进"]') as HTMLButtonElement).click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/settings',{clickPingId:'push'});
+  expect(state.settings.wheel[0]).toBe('push');
+  await act(async()=>{button('试发信号').click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/preview',{id:'push',wheel:'ping'});
+  // Cancelling recording resumes the prior backend state and disables editing while active.
+  await openTab('hotkey');
+  await act(async()=>{button('录制快捷键').click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/suspend',{on:true});
+  expect(document.querySelector('fieldset')?.disabled).toBe(true);
+  await act(async()=>{window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/suspend',{on:false});
+  expect(document.querySelector('fieldset')?.disabled).toBe(false);
+  // Plugin settings omit standalone lifecycle features and reset retains imported metadata.
+  await openTab('app');
+  expect(document.body.textContent).toContain('颜色、字体与深浅模式跟随 DBX');
+  expect(document.querySelector('.source-links')?.textContent).toContain('https://github.com/darrenprx/lolPing');
+  expect(document.querySelector('.source-links a')).toBeNull();
+  expect(document.body.textContent).not.toMatch(/开机自启|开机启动|系统托盘|Start at login/);
+  await act(async()=>{button('重置偏好设置').click();});
+  expect(button('确认重置')).toBeDefined();
+  await act(async()=>{button('确认重置').click();});
+  expect(invoke).toHaveBeenLastCalledWith('lolping/settings',{...DEFAULT_SETTINGS,customEmotes:[custom]});
+  expect(state.settings.customEmotes).toEqual([custom]);
   delete window.dbxPlugin;vi.unstubAllGlobals();
 });

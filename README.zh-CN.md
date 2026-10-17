@@ -6,7 +6,11 @@
 
 ## 安装和使用
 
-0.2.2 修复 Windows 在屏幕边缘触发后，后续轮盘残缺或消失的问题，保持光标位置、轮盘中心和手势不变；详见 [边缘回归验证](docs/validation-0.2.2.md)。继续使用 0.2.1 的 Rust 原生覆盖层和 DBX 内设置页。此前 0.2.1 的 Windows 单屏常用场景采样约 39–52 MiB（插件进程树，不含 DBX 宿主和设置页）；详见 [内存采样及边界](docs/validation-0.2.1.md)。原有设置、自定义素材和离线扩展包继续兼容，保留「暂停 / 恢复」与录制按键后恢复此前状态的行为。
+**0.3.0 重新设计了设置页**，按「触发、快捷开关、信号与声音、轮盘、表情、插件」六个横向 TAB 分类，颜色、深浅色和中性色按钮跟随 DBX。轮盘支持「点击方向 → 点击素材分配」，素材已在其他方向时交换两个槽位；试发使用独立按钮。表情支持搜索，保留图片／声音导入和扩展包下载入口。只显示 DBX 插件已有功能，不包含独立版的开机启动或托盘选项。详见 [发行说明](docs/release-0.3.0.md) 和 [Windows 验证记录](docs/validation-0.3.0.md)。
+
+![lolPing Lite 0.3.0 设置界面：DBX 深色风格与可视化轮盘编辑](docs/images/ui-0.3.0-wheel-dark.png)
+
+覆盖层继续使用 Rust 原生绘制，输入手势保持不变，原有设置、自定义素材和离线扩展包兼容。0.3.0 在此前 [0.2.2 边缘修复](docs/validation-0.2.2.md) 基础上，进一步清除 Windows 在显示、置顶或调整覆盖窗口大小后残留的圆角裁剪，避免屏幕角落的信号缺失。历史 **0.2.1** 的 Windows 单屏常用场景采样约 39–52 MiB（插件进程树，不含 DBX 宿主和设置页），不代表此次 0.3.0 的新测量结果；详见 [内存采样及边界](docs/validation-0.2.1.md)。
 
 1. 在 DBX 插件中心的设置中启用开发包安装，选择对应平台的 `.dbxp`。当前输出是未签名的本地开发包；商店分发需由仓库运营方签名。
 2. 打开「桌面信号」工作台，点击「启动」。默认按住 Alt（Mac 为 Option）并拖动选择信号；Ctrl 对应表情；Ctrl+Alt+P 暂停/恢复。
@@ -48,7 +52,7 @@ npm run dev
 
 - `backend/`：DBX SDK 的 framed JSON-RPC、持久化、资源路径校验、原生音频、上传和资源包校验。
 - `backend/src/render/`：Rust 原生轮盘、信号动画、WebP/GIF 流式解码。tiny-skia 绘制矢量图形，图片使用定点混合；Windows 通过 UpdateLayeredWindow 显示，macOS 使用 CoreGraphics / CALayer。覆盖层只分配当前画面范围的缓冲，空闲时释放；两个后台解码线程各提前缓存有限帧。
-- `src/renderer/`：DBX 承载的 React 设置页。
+- `src/renderer/`：DBX 承载的 React 设置页，继承宿主的主题变量，使用宿主已有界面容器，不为设置启动独立浏览器。
 - `native/hook-helper/`：上游 Win32 全局钩子 / macOS CGEventTap。标准输入关闭后 helper 退出；主动停止先发 shutdown，再执行有界终止。
 - `resources/`：固定版本上游资源，包含素材 SHA-256。主包仅复制 9 个表情，其余生成独立离线包。
 

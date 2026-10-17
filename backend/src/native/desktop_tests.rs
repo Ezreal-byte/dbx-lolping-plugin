@@ -66,6 +66,8 @@ fn edge_then_center_keeps_native_surface_geometry() {
             assert!(!native.windows[&id].visible);
             assert_eq!(native.windows[&id].surface.bytes(), 0);
         }
+        // Exercise the same topmost/style update used by helper wheelOpen/click.
+        native.windows[&id].raise().unwrap();
         native.dispatch(id, "wheelOpen", json!({"x":x,"y":y}));
         pump();
         native
@@ -87,7 +89,13 @@ fn edge_then_center_keeps_native_surface_geometry() {
         );
         assert_eq!((size.width, size.height), (bounds.w, bounds.h), "{label}");
         assert_eq!(w.surface.system_frame(&w.window), Some(false));
+        assert_full_surface_region(w, bounds, label);
         assert_visible_pixels(w, bounds, label);
+        // Raising an already visible, unchanged surface must preserve its corners
+        // without relying on a subsequent geometry change to clear the region.
+        w.raise().unwrap();
+        pump();
+        assert_full_surface_region(w, bounds, label);
         if std::env::var_os("LOLPING_PROBE_HOLD").is_some() && step == 1 {
             for _ in 0..2000 {
                 pump();
@@ -102,6 +110,37 @@ fn edge_then_center_keeps_native_surface_geometry() {
             .unwrap()
             .tick(Instant::now())
             .unwrap();
+    }
+}
+
+// DWM's corner preference does not remove an explicit HWND clipping region.
+// Check the complete rectangle, including corners that can fall between the
+// opaque-pixel samples below. This helper observes the HWND without changing it.
+fn assert_full_surface_region(w: &Overlay, bounds: crate::render::Bounds, label: &str) {
+    use tao::platform::windows::WindowExtWindows;
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateRectRgn, DeleteObject, GetWindowRgn, PtInRegion,
+    };
+    unsafe {
+        let region = CreateRectRgn(0, 0, 0, 0);
+        assert!(!region.is_null());
+        let kind = GetWindowRgn(w.window.hwnd() as _, region);
+        let corners = [
+            (0, 0),
+            (bounds.w as i32 - 1, 0),
+            (0, bounds.h as i32 - 1),
+            (bounds.w as i32 - 1, bounds.h as i32 - 1),
+        ];
+        // GetWindowRgn returns ERROR (0) when no explicit region is installed.
+        let full = kind == 0
+            || corners
+                .into_iter()
+                .all(|(x, y)| PtInRegion(region, x, y) != 0);
+        DeleteObject(region);
+        assert!(
+            full,
+            "{label}: an explicit window region clips surface corners"
+        );
     }
 }
 
@@ -140,6 +179,8 @@ fn assert_visible_pixels(w: &Overlay, bounds: crate::render::Bounds, label: &str
                     .all(|(a, e)| a.abs_diff(e) <= 3)
                 {
                     matched += 1;
+                } else {
+                    eprintln!("{label}: pixel ({x},{y}) expected {expected:?}, actual {actual:?}");
                 }
             }
         }

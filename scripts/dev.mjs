@@ -21,7 +21,13 @@ const server=createServer(async(req,res)=>{
     const file=resolve(root,'ui',path);if(!file.startsWith(resolve(root,'ui')+'/')&&!file.startsWith(resolve(root,'ui')+'\\'))throw Error('Invalid path');
     if(!existsSync(file)){res.writeHead(404).end();return;}
     const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.png':'image/png','.webp':'image/webp'}[extname(file)]||'application/octet-stream';
-    res.setHeader('Content-Type',mime);let data=readFileSync(file);if(path==='index.html')data=Buffer.from(data.toString().replace('<head>','<head><script>'+bridge+'</script>'));res.end(data);
+    res.setHeader('Content-Type',mime);let data=readFileSync(file);if(path==='index.html'){
+      // Local visual QA only: exercise the same theme attribute and locale as DBX.
+      const theme=url.searchParams.get('theme')==='dark'?'dark':'light';
+      const locale=url.searchParams.get('locale')==='en'?'en':'zh-CN';
+      const environment=`document.documentElement.dataset.dbxTheme=${JSON.stringify(theme)};window.dbxPlugin.locale=${JSON.stringify(locale)};`;
+      data=Buffer.from(data.toString().replace('<head>','<head><script>'+bridge+environment+'</script>'));
+    }res.end(data);
   }catch(e){res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:e.message}));}
 });
 server.listen(port,'127.0.0.1',()=>console.log(`Development settings: ${origin}`));
