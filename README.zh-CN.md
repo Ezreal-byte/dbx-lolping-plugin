@@ -6,7 +6,7 @@
 
 ## 安装和使用
 
-0.2.1 将覆盖层迁移为 Rust 原生绘制，修复 Windows 灰色外框，并改进轮盘字体。设置页仍由 DBX 承载，新增扩展表情包下载入口。Windows 单屏常用场景采样约 39–52 MiB（插件进程树，不含 DBX 宿主和设置页）；详见 [验证记录](docs/validation-0.2.1.md)。原有设置、自定义素材和离线扩展包继续兼容，保留「暂停 / 恢复」与录制按键后恢复此前状态的行为。
+0.2.2 修复 Windows 在屏幕边缘触发后，后续轮盘残缺或消失的问题，保持光标位置、轮盘中心和手势不变；详见 [边缘回归验证](docs/validation-0.2.2.md)。继续使用 0.2.1 的 Rust 原生覆盖层和 DBX 内设置页。此前 0.2.1 的 Windows 单屏常用场景采样约 39–52 MiB（插件进程树，不含 DBX 宿主和设置页）；详见 [内存采样及边界](docs/validation-0.2.1.md)。原有设置、自定义素材和离线扩展包继续兼容，保留「暂停 / 恢复」与录制按键后恢复此前状态的行为。
 
 1. 在 DBX 插件中心的设置中启用开发包安装，选择对应平台的 `.dbxp`。当前输出是未签名的本地开发包；商店分发需由仓库运营方签名。
 2. 打开「桌面信号」工作台，点击「启动」。默认按住 Alt（Mac 为 Option）并拖动选择信号；Ctrl 对应表情；Ctrl+Alt+P 暂停/恢复。
@@ -42,7 +42,7 @@ npm run dev
 
 在 Actions 对应运行的 Artifacts 下载 `lolping-lite-windows-x64` 或 `lolping-lite-darwin-arm64`，内含平台 `.dbxp`、SHA-256/大小元数据、离线扩展表情包和验证报告，保留 30 天。Mac 包会先完成 ad-hoc 签名；开发包未经过 DBX 商店签名或 Apple 公证。CI 不自动发布 Release，也不安装到用户 DBX。
 
-构建产物从本仓库 Actions 的 Artifacts 或 [Releases](https://github.com/Ezreal-byte/dbx-lolping-plugin/releases) 下载。Windows 本地验证和内存采样见 `docs/validation-0.2.1.md`；实际发布包的大小和哈希以 Release 的 `release-candidates.json` 与平台 `.artifact.json` 为准。
+构建产物从本仓库 Actions 的 Artifacts 或 [Releases](https://github.com/Ezreal-byte/dbx-lolping-plugin/releases) 下载。边缘显示回归见 `docs/validation-0.2.2.md`，此前 Windows 内存采样见 `docs/validation-0.2.1.md`；实际发布包的大小和哈希以 Release 的 `release-candidates.json` 与平台 `.artifact.json` 为准。
 
 ## 架构与接口
 

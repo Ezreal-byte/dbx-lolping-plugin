@@ -23,6 +23,9 @@ use tao::{
 };
 use tiny_skia::Pixmap;
 
+#[cfg(all(test, target_os = "windows"))]
+mod desktop_tests;
+
 pub enum UserEvent {
     Control {
         method: String,

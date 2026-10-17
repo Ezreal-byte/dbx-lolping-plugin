@@ -652,4 +652,61 @@ mod tests {
         );
         assert!(!scene.active());
     }
+
+    #[test]
+    fn edge_cancel_does_not_leak_into_next_wheel_selection() {
+        let pool = DecoderPool::new();
+        let now = Instant::now();
+        let mut scene = Scene::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            crate::settings::defaults(),
+            Arc::new(Bank::default()),
+        );
+        for (x, y) in [(0., 0.), (0., 450.), (1439., 0.), (1439., 899.)] {
+            scene.event("clear", &Value::Null, &pool, now);
+            scene.event("wheelOpen", &serde_json::json!({"x":x,"y":y}), &pool, now);
+            scene.event(
+                "wheelMove",
+                &serde_json::json!({"x":x+120.,"y":y}),
+                &pool,
+                now,
+            );
+            // Returning to the original press cancels, including at a screen edge.
+            let out = scene.event(
+                "wheelRelease",
+                &serde_json::json!({"x":x,"y":y}),
+                &pool,
+                now,
+            );
+            assert!(out.is_empty());
+            assert!(!scene.active());
+            scene.event(
+                "wheelOpen",
+                &serde_json::json!({"x":720.,"y":450.}),
+                &pool,
+                now,
+            );
+            for scale in [1., 1.25, 1.5, 2.] {
+                let b = scene
+                    .bounds(scale, (1440. * scale) as u32, (900. * scale) as u32)
+                    .unwrap();
+                // Fractional DPI rounds both edges outward, adding at most two pixels.
+                let diameter = (608. * scale) as u32;
+                assert!((diameter..=diameter + 2).contains(&b.w));
+                assert!((diameter..=diameter + 2).contains(&b.h));
+            }
+            let out = scene.event(
+                "wheelRelease",
+                &serde_json::json!({"x":570.,"y":450.}),
+                &pool,
+                now,
+            );
+            assert!(out.iter().any(|o| matches!(o, Output::Selected)));
+            assert!(scene.wheel.is_none());
+            assert_eq!(scene.pings.len(), 1);
+            assert_eq!(scene.pings[0].def.id, "missing");
+            assert_eq!((scene.pings[0].x, scene.pings[0].y), (720., 450.));
+        }
+    }
 }

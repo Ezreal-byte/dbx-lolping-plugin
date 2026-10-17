@@ -20,6 +20,7 @@ mod platform {
         old: HGDIOBJ,
         bits: *mut c_void,
         size: (u32, u32),
+        geometry: Option<(i32, i32, u32, u32)>,
     }
     impl Surface {
         pub fn new(window: &Window) -> Result<Self, String> {
@@ -82,6 +83,7 @@ mod platform {
                     old: ptr::null_mut(),
                     bits: ptr::null_mut(),
                     size: (0, 0),
+                    geometry: None,
                 })
             }
         }
@@ -98,6 +100,7 @@ mod platform {
         }
         pub fn clear(&mut self, _window: &Window) {
             self.release_bitmap();
+            self.geometry = None;
         }
         pub fn bytes(&self) -> usize {
             self.size.0 as usize * self.size.1 as usize * 4
@@ -174,6 +177,25 @@ mod platform {
                     SourceConstantAlpha: 255,
                     AlphaFormat: AC_SRC_ALPHA as u8,
                 };
+                let geometry = (pos.x, pos.y, b.w, b.h);
+                if self.geometry != Some(geometry) {
+                    // Establish the complete destination before uploading pixels. Resizing/moving
+                    // only through UpdateLayeredWindow can retain the previous clipped visible
+                    // region (e.g. a half-wheel at the monitor edge), even though GetWindowRect
+                    // reports the new size. Do not preserve old client pixels across this change.
+                    if SetWindowPos(
+                        window.hwnd() as _,
+                        ptr::null_mut(),
+                        pos.x,
+                        pos.y,
+                        size.cx,
+                        size.cy,
+                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOCOPYBITS,
+                    ) == 0
+                    {
+                        return Err(std::io::Error::last_os_error().to_string());
+                    }
+                }
                 if UpdateLayeredWindow(
                     window.hwnd() as _,
                     ptr::null_mut(),
@@ -188,6 +210,7 @@ mod platform {
                 {
                     return Err(std::io::Error::last_os_error().to_string());
                 }
+                self.geometry = Some(geometry);
                 Ok(())
             }
         }
